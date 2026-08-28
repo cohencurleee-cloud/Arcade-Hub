@@ -5,29 +5,22 @@
   const CODE='1299';
   const AI_HISTORY='arcadeAIHistory';
 
-  let panel=null;
-  let button=null;
-  let tries=[];
-  let aiPanel=null;
-  let aiButton=null;
-  let aiBusy=false;
+  let panel=null,button=null,tries=[],aiPanel=null,aiButton=null,aiBusy=false;
 
   const defaults={
     god:false,
     speed:1,
     snakeAuto:false,
     flappyAuto:false,
-    breakoutAuto:false
+    breakoutAuto:false,
+    pongAuto:false,
+    pongPrediction:false
   };
 
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
   function settings(){
-    try{
-      return {...defaults,...JSON.parse(localStorage.getItem(SETTINGS)||'{}')};
-    }catch{
-      return {...defaults};
-    }
+    try{return {...defaults,...JSON.parse(localStorage.getItem(SETTINGS)||'{}')}}catch{return {...defaults}}
   }
 
   function save(s){
@@ -36,40 +29,25 @@
   }
 
   function command(name){
-    window.dispatchEvent(new CustomEvent('arcade-admin-command',{
-      detail:{command:name,settings:settings()}
-    }));
+    window.dispatchEvent(new CustomEvent('arcade-admin-command',{detail:{command:name,settings:settings()}}));
   }
 
-  function unlocked(){
-    return localStorage.getItem(UNLOCK)==='1';
-  }
+  function unlocked(){return localStorage.getItem(UNLOCK)==='1'}
 
   function pageType(){
     const p=location.pathname.toLowerCase();
     if(p.includes('/games/snake.html'))return 'snake';
     if(p.includes('/games/flappy-square.html'))return 'flappy';
     if(p.includes('/games/breakout.html'))return 'breakout';
+    if(p.includes('/games/pong.html'))return 'pong';
     if(p.includes('/games/'))return 'game';
     return 'hub';
   }
 
-  function speedValue(v){
-    v=Number(v);
-    return Number.isFinite(v)&&v>0?v:1;
-  }
+  function speedValue(v){v=Number(v);return Number.isFinite(v)&&v>0?v:1}
+  function speedText(v){v=speedValue(v);if(v>=1000000||v<0.001)return v.toExponential(2)+'x';return String(v)+'x'}
 
-  function speedText(v){
-    v=speedValue(v);
-    if(v>=1000000||v<0.001)return v.toExponential(2)+'x';
-    return String(v)+'x';
-  }
-
-  window.ArcadeAdmin={
-    getSettings:settings,
-    isUnlocked:unlocked,
-    command
-  };
+  window.ArcadeAdmin={getSettings:settings,isUnlocked:unlocked,command};
 
   function css(){
     if(document.getElementById('arcade-admin-style'))return;
@@ -130,23 +108,18 @@
   function openPanel(){
     css();
     if(panel)panel.remove();
-
-    const s=settings();
-    const type=pageType();
+    const s=settings(),type=pageType();
     let autoRows='';
 
-    if(type==='snake'||type==='hub'){
-      autoRows+=autoRow('aaSnakeAuto','Snake autopilot','Automatically hunts apples and tries to avoid trapping itself.',s.snakeAuto);
-    }
-    if(type==='flappy'||type==='hub'){
-      autoRows+=autoRow('aaFlappyAuto','Flappy autopilot','Automatically times real jumps and aims for pipe openings.',s.flappyAuto);
-    }
-    if(type==='breakout'||type==='hub'){
-      autoRows+=autoRow('aaBreakoutAuto','Breakout autopilot','Tracks the ball and catches falling power-ups.',s.breakoutAuto);
+    if(type==='snake'||type==='hub')autoRows+=autoRow('aaSnakeAuto','Snake autopilot','Automatically hunts apples and tries to avoid trapping itself.',s.snakeAuto);
+    if(type==='flappy'||type==='hub')autoRows+=autoRow('aaFlappyAuto','Flappy autopilot','Automatically times real jumps and aims for pipe openings.',s.flappyAuto);
+    if(type==='breakout'||type==='hub')autoRows+=autoRow('aaBreakoutAuto','Breakout autopilot','Tracks the ball and catches falling power-ups.',s.breakoutAuto);
+    if(type==='pong'||type==='hub'){
+      autoRows+=autoRow('aaPongAuto','Pong autopilot','AI controls your paddle and plays the match for you.',s.pongAuto);
+      autoRows+=autoRow('aaPongPrediction','Pong prediction','Shows the predicted ball path and landing point.',s.pongPrediction);
     }
 
-    const current=speedValue(s.speed);
-    const sliderCurrent=clamp(current,.5,20);
+    const current=speedValue(s.speed),sliderCurrent=clamp(current,.5,20);
 
     panel=document.createElement('div');
     panel.id='arcadeAdminPanel';
@@ -162,17 +135,10 @@
 
     document.body.appendChild(panel);
 
-    const god=panel.querySelector('#aaGod');
-    const speed=panel.querySelector('#aaSpeed');
-    const label=panel.querySelector('#aaSpeedText');
-    const custom=panel.querySelector('#aaCustomSpeed');
-
+    const god=panel.querySelector('#aaGod'),speed=panel.querySelector('#aaSpeed'),label=panel.querySelector('#aaSpeedText'),custom=panel.querySelector('#aaCustomSpeed');
     const applySpeed=value=>{
       const v=Number(String(value).trim());
-      if(!Number.isFinite(v)||v<=0){
-        custom.value=String(speedValue(settings().speed));
-        return;
-      }
+      if(!Number.isFinite(v)||v<=0){custom.value=String(speedValue(settings().speed));return}
       save({...settings(),speed:v});
       label.textContent=speedText(v);
       custom.value=String(v);
@@ -182,62 +148,40 @@
     god.onchange=()=>save({...settings(),god:god.checked});
     speed.oninput=()=>applySpeed(speed.value);
     panel.querySelector('#aaSetSpeed').onclick=()=>applySpeed(custom.value);
-    custom.addEventListener('keydown',e=>{
-      if(e.key==='Enter'){
-        e.preventDefault();
-        applySpeed(custom.value);
-        custom.blur();
-      }
-    });
+    custom.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();applySpeed(custom.value);custom.blur()}});
 
     const snake=panel.querySelector('#aaSnakeAuto');
     const flappy=panel.querySelector('#aaFlappyAuto');
     const breakout=panel.querySelector('#aaBreakoutAuto');
+    const pongAuto=panel.querySelector('#aaPongAuto');
+    const pongPrediction=panel.querySelector('#aaPongPrediction');
 
     if(snake)snake.onchange=()=>save({...settings(),snakeAuto:snake.checked});
     if(flappy)flappy.onchange=()=>save({...settings(),flappyAuto:flappy.checked});
     if(breakout)breakout.onchange=()=>save({...settings(),breakoutAuto:breakout.checked});
+    if(pongAuto)pongAuto.onchange=()=>save({...settings(),pongAuto:pongAuto.checked});
+    if(pongPrediction)pongPrediction.onchange=()=>save({...settings(),pongPrediction:pongPrediction.checked});
 
     panel.querySelector('#aaBoost').onclick=()=>command('boost');
     panel.querySelector('#aaReset').onclick=()=>command('reset');
-    panel.querySelector('#aaClose').onclick=()=>{
-      panel.remove();
-      panel=null;
-    };
-    panel.querySelector('#aaLock').onclick=()=>{
-      localStorage.removeItem(UNLOCK);
-      panel.remove();
-      panel=null;
-      button?.remove();
-      button=null;
-    };
+    panel.querySelector('#aaClose').onclick=()=>{panel.remove();panel=null};
+    panel.querySelector('#aaLock').onclick=()=>{localStorage.removeItem(UNLOCK);panel.remove();panel=null;button?.remove();button=null};
   }
 
   function pin(){
     css();
     if(document.getElementById('arcadePin'))return;
-
     const p=document.createElement('div');
     p.id='arcadePin';
     p.innerHTML=`<div class="box"><b>Enter admin code</b><input id="arcadePinInput" inputmode="numeric" maxlength="4" autocomplete="off"><div class="buttons"><button id="arcadePinCancel">Cancel</button><button id="arcadePinGo">Unlock</button></div></div>`;
     document.body.appendChild(p);
-
     const input=p.querySelector('#arcadePinInput');
     setTimeout(()=>input.focus(),20);
-
     const go=()=>{
-      if(input.value===CODE){
-        localStorage.setItem(UNLOCK,'1');
-        p.remove();
-        mountButton();
-        openPanel();
-      }else{
-        input.value='';
-        input.placeholder='Wrong code';
-      }
+      if(input.value===CODE){localStorage.setItem(UNLOCK,'1');p.remove();mountButton();openPanel()}
+      else{input.value='';input.placeholder='Wrong code'}
     };
-
-    input.onkeydown=e=>{if(e.key==='Enter')go();};
+    input.onkeydown=e=>{if(e.key==='Enter')go()};
     p.querySelector('#arcadePinGo').onclick=go;
     p.querySelector('#arcadePinCancel').onclick=()=>p.remove();
   }
@@ -245,136 +189,68 @@
   function hubSecret(){
     const title=document.querySelector('h1');
     if(!title)return;
-
     title.addEventListener('click',()=>{
       const n=Date.now();
       tries=tries.filter(t=>n-t<2600);
       tries.push(n);
-      if(tries.length>=5){
-        tries=[];
-        pin();
-      }
+      if(tries.length>=5){tries=[];pin()}
     });
-
     let digits='';
     addEventListener('keydown',e=>{
       if(/^\d$/.test(e.key)){
         digits=(digits+e.key).slice(-4);
-        if(digits===CODE){
-          localStorage.setItem(UNLOCK,'1');
-          mountButton();
-          openPanel();
-          digits='';
-        }
+        if(digits===CODE){localStorage.setItem(UNLOCK,'1');mountButton();openPanel();digits=''}
       }
     });
   }
 
   function aiHistory(){
-    try{
-      const h=JSON.parse(localStorage.getItem(AI_HISTORY)||'[]');
-      return Array.isArray(h)?h.slice(-12):[];
-    }catch{
-      return [];
-    }
+    try{const h=JSON.parse(localStorage.getItem(AI_HISTORY)||'[]');return Array.isArray(h)?h.slice(-12):[]}catch{return[]}
   }
 
-  function saveAIHistory(h){
-    try{
-      localStorage.setItem(AI_HISTORY,JSON.stringify(h.slice(-12)));
-    }catch{}
-  }
+  function saveAIHistory(h){try{localStorage.setItem(AI_HISTORY,JSON.stringify(h.slice(-12)))}catch{}}
 
   function renderAI(){
     if(!aiPanel)return;
-    const box=aiPanel.querySelector('#arcadeAIMessages');
-    const h=aiHistory();
+    const box=aiPanel.querySelector('#arcadeAIMessages'),h=aiHistory();
     box.innerHTML='';
-
     if(!h.length){
-      const d=document.createElement('div');
-      d.className='msg bot';
-      d.textContent='Hey — I’m Arcade AI. Ask me about a game, controls, strategies, bugs, or ideas.';
-      box.appendChild(d);
+      const d=document.createElement('div');d.className='msg bot';d.textContent='Hey — I’m Arcade AI. Ask me about a game, controls, strategies, bugs, or ideas.';box.appendChild(d);
     }else{
-      for(const m of h){
-        const d=document.createElement('div');
-        d.className='msg '+(m.role==='user'?'user':'bot');
-        d.textContent=m.content;
-        box.appendChild(d);
-      }
+      for(const m of h){const d=document.createElement('div');d.className='msg '+(m.role==='user'?'user':'bot');d.textContent=m.content;box.appendChild(d)}
     }
-
     box.scrollTop=box.scrollHeight;
   }
 
   async function sendAI(){
     if(aiBusy||!aiPanel)return;
-
-    const input=aiPanel.querySelector('#arcadeAIInput');
-    const send=aiPanel.querySelector('#arcadeAISend');
-    const text=input.value.trim();
+    const input=aiPanel.querySelector('#arcadeAIInput'),send=aiPanel.querySelector('#arcadeAISend'),text=input.value.trim();
     if(!text)return;
-
     let h=aiHistory();
-    h.push({role:'user',content:text});
-    saveAIHistory(h);
-    input.value='';
-    renderAI();
-
-    aiBusy=true;
-    send.disabled=true;
-    send.textContent='...';
-
+    h.push({role:'user',content:text});saveAIHistory(h);input.value='';renderAI();
+    aiBusy=true;send.disabled=true;send.textContent='...';
     try{
-      const r=await fetch('/api/assistant',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({messages:h,page:document.title+' • '+location.pathname})
-      });
+      const r=await fetch('/api/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:h,page:document.title+' • '+location.pathname})});
       const data=await r.json().catch(()=>({}));
       const reply=r.ok?data.reply:(data.error||'Arcade AI is not connected yet.');
-      h=aiHistory();
-      h.push({role:'assistant',content:String(reply)});
-      saveAIHistory(h);
+      h=aiHistory();h.push({role:'assistant',content:String(reply)});saveAIHistory(h);
     }catch{
-      h=aiHistory();
-      h.push({role:'assistant',content:'I could not reach Arcade AI. Make sure GROQ_API_KEY is set in Vercel.'});
-      saveAIHistory(h);
+      h=aiHistory();h.push({role:'assistant',content:'I could not reach Arcade AI. Make sure GROQ_API_KEY is set in Vercel.'});saveAIHistory(h);
     }finally{
-      aiBusy=false;
-      send.disabled=false;
-      send.textContent='Send';
-      renderAI();
-      input.focus();
+      aiBusy=false;send.disabled=false;send.textContent='Send';renderAI();input.focus();
     }
   }
 
   function openAI(){
     css();
-    if(aiPanel){
-      aiPanel.remove();
-      aiPanel=null;
-      return;
-    }
-
+    if(aiPanel){aiPanel.remove();aiPanel=null;return}
     aiPanel=document.createElement('div');
     aiPanel.id='arcadeAIPanel';
     aiPanel.innerHTML=`<div class="aiHead"><b>Arcade AI</b><button id="arcadeAIClose">Close</button></div><div id="arcadeAIMessages"></div><div class="aiComposer"><textarea id="arcadeAIInput" rows="1" placeholder="Ask Arcade AI..."></textarea><button class="send" id="arcadeAISend">Send</button></div>`;
-    document.body.appendChild(aiPanel);
-    renderAI();
-
-    aiPanel.querySelector('#arcadeAIClose').onclick=()=>{
-      aiPanel.remove();
-      aiPanel=null;
-    };
+    document.body.appendChild(aiPanel);renderAI();
+    aiPanel.querySelector('#arcadeAIClose').onclick=()=>{aiPanel.remove();aiPanel=null};
     aiPanel.querySelector('#arcadeAISend').onclick=sendAI;
-    aiPanel.querySelector('#arcadeAIInput').addEventListener('keydown',e=>{
-      if(e.key==='Enter'&&!e.shiftKey){
-        e.preventDefault();
-        sendAI();
-      }
-    });
+    aiPanel.querySelector('#arcadeAIInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAI()}});
     setTimeout(()=>aiPanel?.querySelector('#arcadeAIInput')?.focus(),40);
   }
 
@@ -397,16 +273,6 @@
     document.head.appendChild(s);
   }
 
-  function init(){
-    mountButton();
-    mountAI();
-    loadVibes();
-    if(pageType()==='hub')hubSecret();
-  }
-
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',init);
-  }else{
-    init();
-  }
+  function init(){mountButton();mountAI();loadVibes();if(pageType()==='hub')hubSecret()}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
