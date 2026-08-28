@@ -21,102 +21,131 @@ canvas{display:block;width:min(100vw,432px);height:min(100vh,768px);max-height:1
 <script>
 const c=document.getElementById('c'),ctx=c.getContext('2d');
 const W=c.width,H=c.height,GROUND=690,BX=92,BW=44,BH=32,PIPE_W=72;
-const GRAVITY=1450,FLAP=-430,MAX_FALL=680,PIPE_SPEED=155,PIPE_GAP=178,PIPE_TIME=1.48;
-const BIRD_CX=BX+BW/2,BIRD_LEFT=BX+5,BIRD_RIGHT=BX+BW-6,HALF_H=(BH-8)/2;
-let birdY=330,vel=0,pipes=[],score=0,best=+(localStorage.getItem('flappyBest')||0),state='ready',spawn=0,last=performance.now(),wing=0,autoCooldown=0,deathAt=0;
-let aiTargetY=330,aiPipe=null,aiPath=[],autoWingTimer=0;
+const GRAVITY=1450,FLAP=-430,MAX_FALL=680,PIPE_SPEED=155,PIPE_GAP=178,PIPE_TIME=1.48,FLAP_LOCK=.09;
+const BIRD_LEFT=BX+5,BIRD_RIGHT=BX+BW-6,BIRD_CX=BX+BW/2,BIRD_HALF=(BH-8)/2;
+let birdY=330,vel=0,pipes=[],score=0,best=+(localStorage.getItem('flappyBest')||0),state='ready',spawn=.65,last=performance.now(),wing=0,autoCooldown=0,deathAt=0,lastGapY=330;
+let aiPipe=null,aiTargetY=330,aiPlanTimer=0,aiWantsFlap=false;
 function admin(){return window.ArcadeAdmin?.getSettings?.()||{god:false,speed:1,flappyAuto:false}}
-function reset(){birdY=330;vel=0;pipes=[];score=0;spawn=.65;state='ready';last=performance.now();autoCooldown=0;deathAt=0;aiTargetY=330;aiPipe=null;aiPath=[];autoWingTimer=0}
-function flap(){vel=FLAP;wing=1;autoCooldown=.105}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function reset(){birdY=330;vel=0;pipes=[];score=0;spawn=.65;state='ready';last=performance.now();wing=0;autoCooldown=0;deathAt=0;lastGapY=330;aiPipe=null;aiTargetY=330;aiPlanTimer=0;aiWantsFlap=false}
+function flap(){vel=FLAP;wing=1;autoCooldown=FLAP_LOCK}
 function startFlap(){if(state==='dead'){reset();state='playing'}else if(state==='ready')state='playing';flap()}
-function die(){if(admin().god||admin().flappyAuto)return;state='dead';deathAt=performance.now();best=Math.max(best,score);localStorage.setItem('flappyBest',best)}
-function addPipe(){const margin=112,min=margin+PIPE_GAP/2,max=GROUND-margin-PIPE_GAP/2,gapY=min+Math.random()*(max-min);pipes.push({x:W+25,gapY,passed:false})}
-function collision(p){const top=birdY+4,bottom=birdY+BH-4,pt=p.gapY-PIPE_GAP/2,pb=p.gapY+PIPE_GAP/2;return BIRD_RIGHT>p.x&&BIRD_LEFT<p.x+PIPE_W&&(top<pt||bottom>pb)}
-function nextPipes(){return pipes.filter(p=>p.x+PIPE_W>BIRD_LEFT-4).sort((a,b)=>a.x-b.x)}
-function safeGap(p){const margin=HALF_H+10;return{top:p.gapY-PIPE_GAP/2+margin,bottom:p.gapY+PIPE_GAP/2-margin,center:p.gapY}}
-function runPerfectPilot(dt){
-  const a=admin();
-  if(!a.flappyAuto){hint.textContent='Tap to flap';aiPipe=null;aiPath=[];return false}
-  if(state!=='playing')state='playing';
-  const list=nextPipes();
-  const p=list[0]||null;
-  aiPipe=p;
-  const currentCenter=birdY+BH/2;
-  let target=330;
-  if(p){
-    const gap=safeGap(p);
-    const dx=(p.x+PIPE_W/2)-BIRD_CX;
-    const time=Math.max(0,dx/(PIPE_SPEED*Math.max(.5,a.speed||1)));
-    target=gap.center;
-    if(time>1.0){
-      const blend=Math.max(.25,Math.min(1,(1.65-time)/.65));
-      target=330+(gap.center-330)*blend;
+function die(){if(admin().god)return;state='dead';deathAt=performance.now();best=Math.max(best,score);localStorage.setItem('flappyBest',best)}
+function addPipe(){
+  const min=112+PIPE_GAP/2,max=GROUND-112-PIPE_GAP/2;
+  const raw=min+Math.random()*(max-min);
+  const maxStep=128;
+  const gapY=clamp(raw,lastGapY-maxStep,lastGapY+maxStep);
+  lastGapY=gapY;
+  pipes.push({x:W+25,gapY,passed:false})
+}
+function collisionAt(y,p,px=p.x){const top=y+4,bottom=y+BH-4,pt=p.gapY-PIPE_GAP/2,pb=p.gapY+PIPE_GAP/2;return BIRD_RIGHT>px&&BIRD_LEFT<px+PIPE_W&&(top<pt||bottom>pb)}
+function nextPipesAt(t=0){return pipes.map(p=>({p,x:p.x-PIPE_SPEED*t})).filter(o=>o.x+PIPE_W>BIRD_LEFT-3).sort((a,b)=>a.x-b.x)}
+function safeGap(p){const margin=BIRD_HALF+12;return{top:p.gapY-PIPE_GAP/2+margin,bottom:p.gapY+PIPE_GAP/2-margin,center:p.gapY}}
+function futureShouldFlap(y,vy,cool,t){
+  if(cool>0)return false;
+  const list=nextPipesAt(t),entry=list[0];
+  let target=330,safeTop=48,safeBottom=GROUND-48,timeToFront=.8;
+  if(entry){
+    const g=safeGap(entry.p);target=g.center;safeTop=g.top;safeBottom=g.bottom;
+    timeToFront=Math.max(0,(entry.x-BIRD_RIGHT)/PIPE_SPEED);
+    if(timeToFront>.85)target=330+(target-330)*clamp((1.45-timeToFront)/.6,.2,1);
+    if(timeToFront<.12&&list[1])target=g.center*.82+list[1].p.gapY*.18;
+  }
+  const horizon=clamp(timeToFront*.58,.08,.42);
+  const predicted=y+vy*horizon+.5*GRAVITY*horizon*horizon;
+  const afterFlap=y+FLAP*horizon+.5*GRAVITY*horizon*horizon;
+  if(y>GROUND-82)return true;
+  if(y<46)return false;
+  if(entry&&timeToFront<.32){
+    if(y<safeTop+10)return false;
+    if(afterFlap<safeTop-8)return false;
+    if(y>safeBottom-10)return true;
+  }
+  return predicted>target+8&&afterFlap>safeTop-14
+}
+function rollout(flapNow){
+  const step=.025,horizon=2.15;
+  let y=birdY+BH/2,vy=vel,cool=autoCooldown,scoreSim=0;
+  for(let i=0,t=0;t<horizon;i++,t+=step){
+    let doFlap=false;
+    if(i===0)doFlap=flapNow&&cool<=0;
+    else doFlap=futureShouldFlap(y,vy,cool,t);
+    if(doFlap){vy=FLAP;cool=FLAP_LOCK;scoreSim-=1.8}
+    cool=Math.max(0,cool-step);
+    vy=Math.min(MAX_FALL,vy+GRAVITY*step);
+    y+=vy*step;
+    const top=y-BH/2+4,bottom=y+BH/2-4;
+    if(top<0||bottom>GROUND)return-1e9;
+    const list=nextPipesAt(t+step);
+    for(const o of list.slice(0,3)){
+      const pt=o.p.gapY-PIPE_GAP/2,pb=o.p.gapY+PIPE_GAP/2;
+      if(BIRD_RIGHT>o.x&&BIRD_LEFT<o.x+PIPE_W){
+        if(top<pt||bottom>pb)return-1e9;
+        const margin=Math.min(top-pt,pb-bottom);
+        scoreSim+=60+Math.max(0,margin)*1.7;
+      }
+      const dx=o.x-BIRD_RIGHT;
+      if(dx>=0&&dx<250){
+        const g=safeGap(o.p),proximity=1-dx/250;
+        scoreSim-=Math.abs(y-g.center)*(.012+proximity*.06);
+      }
     }
-    if(time<.14&&list[1])target=gap.center*.82+list[1].gapY*.18;
+    scoreSim+=.45-Math.abs(vy)*.00035;
   }
-  aiTargetY=target;
-  const maxMove=Math.max(330,Math.min(520,Math.abs(target-currentCenter)*6+250))*dt;
-  const delta=Math.max(-maxMove,Math.min(maxMove,target-currentCenter));
-  let newCenter=currentCenter+delta;
-  if(p&&p.x<BIRD_RIGHT+8&&p.x+PIPE_W>BIRD_LEFT-8){
-    const gap=safeGap(p);
-    newCenter=Math.max(gap.top+5,Math.min(gap.bottom-5,newCenter));
+  return scoreSim
+}
+function runAIPilot(gameDt){
+  const a=admin();
+  if(!a.flappyAuto){hint.textContent='Tap to flap';aiPipe=null;aiWantsFlap=false;return}
+  if(state==='dead'){
+    hint.textContent='AI PILOT • restarting';
+    if(performance.now()-deathAt>300){reset();state='playing';flap()}
+    return
   }
-  newCenter=Math.max(42,Math.min(GROUND-42,newCenter));
-  vel=dt>0?(newCenter-currentCenter)/dt:0;
-  birdY=newCenter-BH/2;
-  autoWingTimer-=dt;
-  if(autoWingTimer<=0){wing=1;autoWingTimer=.17}else wing=Math.max(0,wing-dt*7);
-  aiPath=[];
-  for(let i=1;i<=8;i++){
-    const t=i*.1;
-    const y=currentCenter+(target-currentCenter)*Math.min(1,t/.8);
-    aiPath.push({y,t})
+  if(state==='ready'){state='playing';flap();return}
+  const list=nextPipesAt(0),entry=list[0];
+  aiPipe=entry?entry.p:null;aiTargetY=entry?entry.p.gapY:330;
+  autoCooldown=Math.max(0,autoCooldown-gameDt);
+  aiPlanTimer-=gameDt;
+  if(aiPlanTimer<=0){
+    aiPlanTimer=.018;
+    const no=rollout(false),yes=autoCooldown<=0?rollout(true):-1e9;
+    aiWantsFlap=yes>no+0.8;
+    if(no<=-1e8&&yes>-1e8)aiWantsFlap=true;
   }
-  hint.textContent=p?'PERFECT AI • locked on opening':'PERFECT AI • scanning';
-  return true
+  if(futureShouldFlap(birdY+BH/2,vel,autoCooldown,0))aiWantsFlap=true;
+  if(aiWantsFlap&&autoCooldown<=0){flap();aiWantsFlap=false}
+  hint.textContent=entry?`AI PILOT • jumping • ${Number(a.speed||1).toFixed(1)}x`:'AI PILOT • scanning'
 }
 function drawCloud(x,y,s){ctx.fillStyle='rgba(255,255,255,.72)';ctx.fillRect(x,y,34*s,15*s);ctx.fillRect(x+8*s,y-9*s,22*s,12*s);ctx.fillRect(x+18*s,y-15*s,18*s,18*s)}
-function drawBackground(t){ctx.fillStyle='#70c5ce';ctx.fillRect(0,0,W,H);drawCloud(25,165,1);drawCloud(280,105,.85);drawCloud(185,260,.65);ctx.fillStyle='#d9f0d2';for(let i=0;i<8;i++){const xx=((i*66-(t*.012)%66)+66)%528-48,h=45+(i%3)*18;ctx.fillRect(xx,GROUND-92-h,48,h);ctx.fillStyle='#b5ddb6';ctx.fillRect(xx+8,GROUND-83-h,8,h-7);ctx.fillStyle='#d9f0d2'}ctx.fillStyle='#87c56b';ctx.fillRect(0,GROUND-20,W,20);ctx.fillStyle='#ded895';ctx.fillRect(0,GROUND,W,H-GROUND);ctx.fillStyle='#8fcf55';ctx.fillRect(0,GROUND,W,12);ctx.fillStyle='#5f9b35';ctx.fillRect(0,GROUND+12,W,5);ctx.fillStyle='rgba(255,255,255,.25)';for(let xx=-20;xx<W;xx+=28)ctx.fillRect(xx+(t*.04)%28,GROUND+23,14,4)}
-function drawPipe(p){const topH=p.gapY-PIPE_GAP/2,bottomY=p.gapY+PIPE_GAP/2;pipePart(p.x,0,PIPE_W,topH,true);pipePart(p.x,bottomY,PIPE_W,GROUND-bottomY,false)}
+function drawBackground(t){ctx.fillStyle='#70c5ce';ctx.fillRect(0,0,W,H);drawCloud(25,165,1);drawCloud(280,105,.85);drawCloud(185,260,.65);ctx.fillStyle='#d9f0d2';for(let i=0;i<8;i++){const x=((i*66-(t*.012)%66)+66)%528-48,h=45+(i%3)*18;ctx.fillRect(x,GROUND-92-h,48,h);ctx.fillStyle='#b5ddb6';ctx.fillRect(x+8,GROUND-83-h,8,h-7);ctx.fillStyle='#d9f0d2'}ctx.fillStyle='#87c56b';ctx.fillRect(0,GROUND-20,W,20);ctx.fillStyle='#ded895';ctx.fillRect(0,GROUND,W,H-GROUND);ctx.fillStyle='#8fcf55';ctx.fillRect(0,GROUND,W,12);ctx.fillStyle='#5f9b35';ctx.fillRect(0,GROUND+12,W,5);ctx.fillStyle='rgba(255,255,255,.25)';for(let x=-20;x<W;x+=28)ctx.fillRect(x+(t*.04)%28,GROUND+23,14,4)}
 function pipePart(x,y,w,h,top){if(h<=0)return;ctx.fillStyle='#3d3d3d';ctx.fillRect(x-3,y,w+6,h);ctx.fillStyle='#76b947';ctx.fillRect(x,y,w,h);ctx.fillStyle='#a8f05a';ctx.fillRect(x+8,y,11,h);ctx.fillStyle='#4c8430';ctx.fillRect(x+w-13,y,10,h);const capH=36,capY=top?Math.max(0,y+h-capH):y;ctx.fillStyle='#3d3d3d';ctx.fillRect(x-9,capY-3,w+18,capH+6);ctx.fillStyle='#76b947';ctx.fillRect(x-6,capY,w+12,capH);ctx.fillStyle='#b0f35d';ctx.fillRect(x+4,capY,10,capH);ctx.fillStyle='#4d8530';ctx.fillRect(x+w-4,capY,10,capH)}
-function drawBird(){ctx.save();ctx.translate(BX+BW/2,birdY+BH/2);const rot=Math.max(-.32,Math.min(.65,vel/850));ctx.rotate(rot);ctx.translate(-BW/2,-BH/2);ctx.fillStyle='#111';ctx.fillRect(0,5,38,23);ctx.fillRect(6,1,25,30);ctx.fillRect(28,8,16,17);ctx.fillStyle='#f9e713';ctx.fillRect(4,8,24,18);ctx.fillRect(9,4,18,24);ctx.fillStyle='#ffb400';ctx.fillRect(5,wing?18:20,19,8);ctx.fillStyle='#fff';ctx.fillRect(23,4,13,14);ctx.fillStyle='#f1f1f1';ctx.fillRect(25,7,10,12);ctx.fillStyle='#111';ctx.fillRect(32,8,4,8);ctx.fillStyle='#f15a24';ctx.fillRect(32,17,12,7);ctx.fillRect(29,22,12,6);ctx.restore()}
-function drawAIGuide(){
-  if(!admin().flappyAuto)return;
-  if(aiPipe){const g=safeGap(aiPipe);ctx.save();ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(aiPipe.x+3,g.top,PIPE_W-6,Math.max(2,g.bottom-g.top));ctx.strokeStyle='rgba(255,255,255,.45)';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(BX+BW+6,aiTargetY);ctx.lineTo(Math.max(BX+BW+6,aiPipe.x-4),aiTargetY);ctx.stroke();ctx.setLineDash([]);ctx.restore()}
-  if(aiPath.length){ctx.save();ctx.fillStyle='rgba(255,255,255,.45)';for(let i=0;i<aiPath.length;i++){const p=aiPath[i],xx=BIRD_CX+i*18;ctx.beginPath();ctx.arc(Math.min(W-8,xx),p.y,2,0,Math.PI*2);ctx.fill()}ctx.restore()}
-}
+function drawPipe(p){const topH=p.gapY-PIPE_GAP/2,bottomY=p.gapY+PIPE_GAP/2;pipePart(p.x,0,PIPE_W,topH,true);pipePart(p.x,bottomY,PIPE_W,GROUND-bottomY,false)}
+function drawBird(){ctx.save();ctx.translate(BX+BW/2,birdY+BH/2);const rot=Math.max(-.38,Math.min(.85,vel/760));ctx.rotate(rot);ctx.translate(-BW/2,-BH/2);ctx.fillStyle='#111';ctx.fillRect(0,5,38,23);ctx.fillRect(6,1,25,30);ctx.fillRect(28,8,16,17);ctx.fillStyle='#f9e713';ctx.fillRect(4,8,24,18);ctx.fillRect(9,4,18,24);ctx.fillStyle='#ffb400';ctx.fillRect(5,wing?18:20,19,8);ctx.fillStyle='#fff';ctx.fillRect(23,4,13,14);ctx.fillStyle='#f1f1f1';ctx.fillRect(25,7,10,12);ctx.fillStyle='#111';ctx.fillRect(32,8,4,8);ctx.fillStyle='#f15a24';ctx.fillRect(32,17,12,7);ctx.fillRect(29,22,12,6);ctx.restore()}
+function drawAIGuide(){if(!admin().flappyAuto||!aiPipe)return;const g=safeGap(aiPipe);ctx.save();ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(aiPipe.x+3,g.top,PIPE_W-6,Math.max(2,g.bottom-g.top));ctx.strokeStyle='rgba(255,255,255,.38)';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(BX+BW+5,aiTargetY);ctx.lineTo(Math.max(BX+BW+5,aiPipe.x-4),aiTargetY);ctx.stroke();ctx.restore()}
 function centerText(text,y,size){ctx.textAlign='center';ctx.font=`900 ${size}px system-ui`;ctx.lineWidth=5;ctx.strokeStyle='rgba(0,0,0,.35)';ctx.strokeText(text,W/2,y);ctx.fillStyle='#fff';ctx.fillText(text,W/2,y)}
-function drawUI(){centerText(String(score),72,42);if(state==='ready'){centerText('FLAPPY BIRD',250,36);centerText(admin().flappyAuto?'Perfect AI ready':'Tap to start',305,21)}if(state==='dead'){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(65,245,302,190);centerText('GAME OVER',292,32);ctx.textAlign='left';ctx.font='800 19px system-ui';ctx.fillStyle='#fff';ctx.fillText('Score',105,345);ctx.fillText('Best',105,385);ctx.textAlign='right';ctx.fillText(score,325,345);ctx.fillText(best,325,385);centerText('Tap to restart',420,16)}}
+function drawUI(){centerText(String(score),72,42);if(state==='ready'){centerText('FLAPPY BIRD',250,36);centerText(admin().flappyAuto?'AI pilot ready':'Tap to start',305,21)}if(state==='dead'){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(65,245,302,190);centerText('GAME OVER',292,32);ctx.textAlign='left';ctx.font='800 19px system-ui';ctx.fillStyle='#fff';ctx.fillText('Score',105,345);ctx.fillText('Best',105,385);ctx.textAlign='right';ctx.fillText(score,325,345);ctx.fillText(best,325,385);centerText(admin().flappyAuto?'AI restarting…':'Tap to restart',420,16)}}
 function update(dt){
-  const a=admin();
-  const perfect=runPerfectPilot(dt);
+  const a=admin(),speed=clamp(Number(a.speed)||1,.5,2),gameDt=dt*speed;
+  runAIPilot(gameDt);
   if(state!=='playing')return;
-  if(!perfect){
-    vel=Math.min(MAX_FALL,vel+GRAVITY*dt);
-    birdY+=vel*dt;
-    wing=Math.max(0,wing-dt*7);
-  }
-  spawn+=dt*a.speed;
+  if(!a.flappyAuto)autoCooldown=Math.max(0,autoCooldown-gameDt);
+  vel=Math.min(MAX_FALL,vel+GRAVITY*gameDt);
+  birdY+=vel*gameDt;
+  wing=Math.max(0,wing-gameDt*7);
+  spawn+=gameDt;
   if(spawn>=PIPE_TIME){spawn-=PIPE_TIME;addPipe()}
-  for(const p of pipes){
-    p.x-=PIPE_SPEED*dt*a.speed;
-    if(!p.passed&&p.x+PIPE_W<BX){p.passed=true;score++}
-    if(!perfect&&collision(p))die()
-  }
+  for(const p of pipes){p.x-=PIPE_SPEED*gameDt;if(!p.passed&&p.x+PIPE_W<BX){p.passed=true;score++}if(collisionAt(birdY,p))die()}
   pipes=pipes.filter(p=>p.x>-PIPE_W-20);
-  if(!perfect){
-    if(birdY<0){if(a.god){birdY=0;vel=0}else die()}
-    if(birdY+BH>GROUND){if(a.god){birdY=GROUND-BH;vel=-160}else die()}
-  }else{
-    birdY=Math.max(0,Math.min(GROUND-BH,birdY));
-  }
+  if(birdY<0){if(a.god){birdY=0;vel=0}else die()}
+  if(birdY+BH>GROUND){if(a.god){birdY=GROUND-BH;vel=-160}else die()}
 }
 function frame(now){const dt=Math.min(.033,(now-last)/1000||0);last=now;update(dt);drawBackground(now);pipes.forEach(drawPipe);drawAIGuide();drawBird();drawUI();requestAnimationFrame(frame)}
 c.addEventListener('pointerdown',e=>{e.preventDefault();if(!admin().flappyAuto)startFlap()},{passive:false});
 addEventListener('keydown',e=>{if(e.code==='Space'&&!admin().flappyAuto){e.preventDefault();startFlap()}});
 restart.onclick=reset;
-addEventListener('arcade-admin-change',()=>{if(admin().flappyAuto)state='playing'});
+addEventListener('arcade-admin-change',()=>{if(admin().flappyAuto&&state==='ready'){state='playing';flap()}});
 addEventListener('arcade-admin-command',e=>{if(e.detail.command==='boost')score+=10;if(e.detail.command==='reset')reset()});
 reset();requestAnimationFrame(frame);
 </script>
