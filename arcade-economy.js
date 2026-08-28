@@ -11,8 +11,9 @@
     {id:'dash-void',name:'Void Cube',game:'Block Dash',type:'dashSkin',skin:'void',price:400,desc:'Unlock the Void cube and course vibe.',preview:['#d89cff','#694cff']},
     {id:'dash-gold',name:'Gold Cube',game:'Block Dash',type:'dashSkin',skin:'gold',price:600,desc:'Unlock the Gold cube and course vibe.',preview:['#fff0a0','#d79725']}
   ];
-  const defaults={coins:100,owned:['theme-midnight'],equipped:{theme:'theme-midnight'},lastDaily:'',earned:0,spent:0};
-  function state(){try{const v=JSON.parse(localStorage.getItem(KEY)||'{}');return{...defaults,...v,owned:Array.isArray(v.owned)?v.owned:defaults.owned,equipped:{...defaults.equipped,...(v.equipped||{})}}}catch{return structuredClone?structuredClone(defaults):JSON.parse(JSON.stringify(defaults))}}
+  const defaults={coins:150,owned:['theme-midnight'],equipped:{theme:'theme-midnight'},lastDaily:'',earned:0,spent:0};
+  function fresh(){return JSON.parse(JSON.stringify(defaults))}
+  function state(){try{const v=JSON.parse(localStorage.getItem(KEY)||'{}');return{...fresh(),...v,owned:Array.isArray(v.owned)?v.owned:['theme-midnight'],equipped:{theme:'theme-midnight',...(v.equipped||{})}}}catch{return fresh()}}
   function save(s){localStorage.setItem(KEY,JSON.stringify(s));window.dispatchEvent(new CustomEvent('arcade-economy-change',{detail:{state:s}}));return s}
   function add(amount,reason='Reward'){amount=Math.max(0,Math.floor(Number(amount)||0));if(!amount)return state().coins;const s=state();s.coins+=amount;s.earned=(s.earned||0)+amount;save(s);window.dispatchEvent(new CustomEvent('arcade-coins-earned',{detail:{amount,reason,balance:s.coins}}));return s.coins}
   function spend(amount){amount=Math.max(0,Math.floor(Number(amount)||0));const s=state();if(amount>s.coins)return false;s.coins-=amount;s.spent=(s.spent||0)+amount;save(s);return true}
@@ -31,7 +32,7 @@
   function currentTheme(){return state().equipped.theme||localStorage.getItem(THEME_KEY)||'theme-midnight'}
   function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
   function dailyAvailable(){return state().lastDaily!==today()}
-  function claimDaily(){const s=state(),t=today();if(s.lastDaily===t)return{ok:false,balance:s.coins};s.lastDaily=t;s.coins+=25;s.earned=(s.earned||0)+25;save(s);return{ok:true,amount:25,balance:s.coins}}
+  function claimDaily(){const s=state(),t=today();if(s.lastDaily===t)return{ok:false,balance:s.coins};s.lastDaily=t;s.coins+=30;s.earned=(s.earned||0)+30;save(s);return{ok:true,amount:30,balance:s.coins}}
   window.ArcadeEconomy={state,save,balance:()=>state().coins,add,spend,catalog:()=>CATALOG.map(x=>({...x})),item,owns,purchase,equip,currentTheme,dailyAvailable,claimDaily};
 
   if(location.pathname.toLowerCase().includes('/games/')){
