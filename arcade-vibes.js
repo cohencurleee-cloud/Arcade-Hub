@@ -1,5 +1,5 @@
 (()=>{
-  const KEY='arcadeAudioEnabled',path=location.pathname.toLowerCase();
+  const KEY='arcadeAudioEnabled',COS_KEY='arcadeGameCosmeticsV1',path=location.pathname.toLowerCase();
   const game=path.includes('flappy-square')?'flappy':path.includes('snake')?'snake':path.includes('breakout')?'breakout':path.includes('pong')?'pong':path.includes('memory')?'memory':path.includes('block-dash')?'dash':'hub';
   const isGame=game!=='hub';
   const songs={
@@ -14,6 +14,19 @@
   const meta=songs[game];
   let enabled=localStorage.getItem(KEY)!=='0',ctx=null,master=null,musicTimer=null,musicStep=0,started=false,activeVoices=0,lastChirpAt=0,lastScoreAt=0,lastUIClickAt=0;
   const MAX_VOICES=12,wavCache=new Map(),audioButton=document.createElement('button'),nowPlaying=document.createElement('div'),fx=document.createElement('div');
+
+  function cosmetic(){try{const v=JSON.parse(localStorage.getItem(COS_KEY)||'{}');return v?.[game]||'default'}catch{return'default'}}
+  function applyCosmetic(){
+    const skin=cosmetic();document.documentElement.dataset.arcadeCosmetic=skin;document.body.dataset.arcadeCosmetic=skin;
+    if(!isGame)return;
+    const canvas=document.querySelector('canvas');if(!canvas)return;
+    const filters={
+      flappy:{night:'brightness(.78) saturate(1.35) hue-rotate(28deg)',candy:'brightness(1.07) saturate(1.5) hue-rotate(315deg)'},
+      snake:{venom:'brightness(1.04) saturate(1.5) hue-rotate(22deg)',ice:'brightness(1.08) saturate(1.18) hue-rotate(150deg)'},
+      breakout:{plasma:'brightness(1.05) saturate(1.45) hue-rotate(28deg)',ice:'brightness(1.08) saturate(1.12) hue-rotate(155deg)'}
+    };
+    canvas.style.filter=filters[game]?.[skin]||'';
+  }
 
   function css(){if(document.getElementById('arcade-vibes-style'))return;const s=document.createElement('style');s.id='arcade-vibes-style';s.textContent=`
 #arcadeAudioButton{position:fixed;z-index:99989;left:12px;bottom:max(12px,env(safe-area-inset-bottom));min-width:48px;height:48px;padding:0 12px;border-radius:15px;border:1px solid rgba(255,255,255,.18);background:rgba(14,18,27,.9);color:#fff;font:900 17px system-ui;box-shadow:0 10px 26px rgba(0,0,0,.35);backdrop-filter:blur(12px)}
@@ -41,6 +54,6 @@
   async function toggleAudio(showToast=true){enabled=!enabled;localStorage.setItem(KEY,enabled?'1':'0');if(enabled)await startAudio(showToast);else{stopAudio();if(showToast)toast('Music off')}syncButton();window.dispatchEvent(new CustomEvent('arcade-vibes-state',{detail:{enabled}}));return enabled}
   function uiClick(){const now=performance.now();if(now-lastUIClickAt<120)return;lastUIClickAt=now;if(enabled&&ctx?.state==='running')webTone(game==='flappy'?880:520,.04,.06,'sine')}
   function mountUI(){if(isGame)return;audioButton.id='arcadeAudioButton';audioButton.setAttribute('aria-label','Toggle arcade music');syncButton();audioButton.onclick=async e=>{e.stopPropagation();await toggleAudio(true)};document.body.appendChild(audioButton);nowPlaying.id='arcadeNowPlaying';nowPlaying.textContent=`${meta.icon} Arcade Hub Music`;document.body.appendChild(nowPlaying)}
-  function init(){if(document.getElementById('arcade-vibes-style'))return;configureIOSAudio();css();mountEffects();mountUI();const wake=async e=>{if(e?.target?.closest?.('#arcadeAudioButton'))return;configureIOSAudio();if(enabled&&!started)await startAudio(false)};addEventListener('pointerdown',wake,{passive:true});addEventListener('touchstart',wake,{passive:true});addEventListener('click',wake,{passive:true});addEventListener('pageshow',()=>{if(enabled&&!started)startAudio(false)});addEventListener('focus',()=>{if(enabled&&!started)startAudio(false)});document.addEventListener('click',e=>{if(e.target.closest('button,a,.card')&&e.target!==audioButton)uiClick()});document.addEventListener('visibilitychange',()=>{if(document.hidden)stopAudio();else if(enabled)startAudio(false)});addEventListener('arcade-vibes-toggle',()=>toggleAudio(true));window.ArcadeVibes={tone,start:startAudio,toggle:toggleAudio,isEnabled:()=>enabled,label:()=>meta.name,play:async name=>{if(!enabled)return;configureIOSAudio();await resumeAudio();if(name==='flap'&&game==='flappy'){birdChirp();return}if(name==='score'){const now=performance.now();if(now-lastScoreAt<120)return;lastScoreAt=now}const map={score:[1047,.06,.24],hit:[145,.13,.46],win:[1175,.16,.34],level:[880,.10,.28]},v=map[name]||[520,.07,.22];tone(v[0],v[1],v[2],'sine')}};if(enabled)startAudio(false)}
+  function init(){if(document.getElementById('arcade-vibes-style'))return;configureIOSAudio();css();applyCosmetic();mountEffects();mountUI();const wake=async e=>{if(e?.target?.closest?.('#arcadeAudioButton'))return;configureIOSAudio();if(enabled&&!started)await startAudio(false)};addEventListener('pointerdown',wake,{passive:true});addEventListener('touchstart',wake,{passive:true});addEventListener('click',wake,{passive:true});addEventListener('pageshow',()=>{applyCosmetic();if(enabled&&!started)startAudio(false)});addEventListener('focus',()=>{if(enabled&&!started)startAudio(false)});addEventListener('storage',e=>{if(e.key===COS_KEY)applyCosmetic()});addEventListener('arcade-cosmetic-change',applyCosmetic);document.addEventListener('click',e=>{if(e.target.closest('button,a,.card')&&e.target!==audioButton)uiClick()});document.addEventListener('visibilitychange',()=>{if(document.hidden)stopAudio();else if(enabled)startAudio(false)});addEventListener('arcade-vibes-toggle',()=>toggleAudio(true));window.ArcadeVibes={tone,start:startAudio,toggle:toggleAudio,isEnabled:()=>enabled,label:()=>meta.name,play:async name=>{if(!enabled)return;configureIOSAudio();await resumeAudio();if(name==='flap'&&game==='flappy'){birdChirp();return}if(name==='score'){const now=performance.now();if(now-lastScoreAt<120)return;lastScoreAt=now}const map={score:[1047,.06,.24],hit:[145,.13,.46],win:[1175,.16,.34],level:[880,.10,.28]},v=map[name]||[520,.07,.22];tone(v[0],v[1],v[2],'sine')}};if(enabled)startAudio(false)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
