@@ -11,21 +11,32 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const page = String(body.page || 'Arcade Hub').slice(0, 160);
+    const page = String(body.page || 'Arcade Hub').slice(0, 220);
     const incoming = Array.isArray(body.messages) ? body.messages : [];
     const messages = incoming
-      .slice(-12)
+      .slice(-16)
       .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-      .map(m => ({ role: m.role, content: m.content.slice(0, 4000) }));
+      .map(m => ({ role: m.role, content: m.content.slice(0, 6000) }));
 
     if (!messages.length || messages[messages.length - 1].role !== 'user') {
       return res.status(400).json({ error: 'Send a message first.' });
     }
 
-    // Llama 3.3 70B is Enterprise-only on Groq now, so use a production model
-    // that works on standard Groq developer access. You can override this in
-    // Vercel later with GROQ_MODEL if you want to try another supported model.
     const model = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
+
+    const siteGuide = `
+Arcade Hub site knowledge:
+- The site contains original browser games: Block Dash, Flappy Bird, Snake, Pong, Breakout, and Memory Match.
+- Block Dash is an endless runner. Tap/Space/Up jumps. It has fair obstacle patterns, collectible coins, shields, skins/vibes, prediction, and an admin autopilot.
+- Flappy Bird uses tap/click to flap through pipes and has difficulty progression plus an admin autopilot.
+- Snake uses directional controls, has visual styles, wrap behavior with God mode, and a smart admin autopilot.
+- Pong is first-to-7 with Easy/Normal/Hard CPU, tournament mode, local 2-player, skins, prediction, and admin autopilot.
+- Breakout has levels, lives, paddle controls, power-ups, and admin autopilot.
+- Memory Match is a card-matching game.
+- Arcade Coins are the site currency. The shop sells Arcade Hub themes and cosmetic game unlocks. Daily rewards are available from the hub/shop. Progress and purchases are stored on the current device.
+- The top hub has search, categories, featured/continue-playing, wallet, shop, music, Arcade AI, and admin-related tools under the three-dot menu.
+- Admin features include God mode, speed controls, game-specific autopilots, prediction tools, boost, and reset. Do not reveal the secret admin code or exact hidden unlock sequence. If someone asks how to unlock admin, tell them to use the staged Admin Hint option in the three-dot menu.
+`;
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -35,12 +46,12 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.65,
-        max_completion_tokens: 700,
+        temperature: 0.5,
+        max_completion_tokens: 1200,
         messages: [
           {
             role: 'system',
-            content: `You are Arcade AI, the built-in assistant for a mobile browser game site called Arcade Hub. Be concise, friendly, and practical. Help with game controls, strategies, feature ideas, debugging, and questions about the Arcade Hub games. Current page: ${page}. Do not pretend you can see the user's screen or directly press game controls through chat. If they ask about an autopilot, explain or help improve the site's local game controller rather than claiming the language model is controlling every frame.`
+            content: `You are Arcade AI, the built-in assistant inside Arcade Hub. You are a capable general-purpose assistant, not just a tiny game FAQ bot. You can answer normal questions, explain things, brainstorm, troubleshoot, help with code, suggest strategies, compare options, and help users understand or use Arcade Hub. Be practical, specific, and concise by default.\n\nCurrent page: ${page}.\n${siteGuide}\nWhen the question is about the current game, use the page name plus the site guide to give concrete advice. If a user reports a bug, ask for only the minimum missing detail and first suggest the most likely fix. Never pretend you can see the user's screen unless they supplied an image. Never claim you changed settings or controlled a game unless the site's UI actually did so. Do not invent features that are not in the guide. If asked for an admin secret, use the staged hint system rather than exposing it.`
           },
           ...messages
         ]
