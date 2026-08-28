@@ -26,14 +26,15 @@ module.exports = async function handler(req, res) {
 
     const siteGuide = `
 Arcade Hub site knowledge:
-- The site contains original browser games: Block Dash, Flappy Bird, Snake, Pong, Breakout, and Memory Match.
+- The site contains original browser games: 8 Ball Pool, Block Dash, Flappy Bird, Snake, Pong, Breakout, and Memory Match.
+- 8 Ball Pool has realistic-style 2D ball physics, solids and stripes, the 8 ball, fouls/scratches, VS CPU, local 2-player, practice mode, saved CPU match records, Pool table cosmetics, Arcade Coin rewards for CPU wins, admin Pool Autopilot, and admin Pool Predictor. The predictor shows the cue-ball path, first contact, and planned object-ball route. The autopilot plans legal shots and can play the user's turns.
 - Block Dash is an endless runner. Tap/Space/Up jumps. It has fair obstacle patterns, collectible coins, shields, skins/vibes, prediction, and an admin autopilot.
 - Flappy Bird uses tap/click to flap through pipes and has difficulty progression plus an admin autopilot. The shop has visual Flappy cosmetics such as Night Flight and Candy Sky.
 - Snake uses directional controls, has visual styles, wrap behavior with God mode, and a smart admin autopilot. The shop has visual Snake cosmetics such as Neon Venom and Ice Serpent.
 - Pong is first-to-7 with Easy/Normal/Hard CPU, tournament mode, local 2-player, skins, prediction, and admin autopilot.
 - Breakout has levels, lives, paddle controls, power-ups, and admin autopilot. The shop has Breakout visual cosmetics.
 - Memory Match has Classic, Medium, and Expert board sizes, move/time tracking, best records, streaks, a limited normal Peek, Arcade Coin win rewards, admin Memory Autopilot, and admin XRAY that reveals hidden cards. It also has Hologram and Galaxy shop decks.
-- Arcade Coins are the site currency. The shop now has cosmetic unlocks for every game plus Arcade Hub themes. Daily rewards are available from the hub/shop. Progress and purchases are stored on the current device.
+- Arcade Coins are the site currency. The shop has cosmetic unlocks for every game plus Arcade Hub themes. Daily rewards are available from the hub/shop. Progress and purchases are stored on the current device.
 - The top hub has search, categories, featured/continue-playing, wallet, shop, music, Arcade AI, and admin-related tools under the three-dot menu.
 - Admin features include God mode, speed controls, game-specific autopilots, prediction/XRAY tools, boost, and reset. Do not reveal the secret admin code or exact hidden unlock sequence. If someone asks how to unlock admin, tell them to use the staged Admin Hint option in the three-dot menu.
 `;
