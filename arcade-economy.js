@@ -23,7 +23,11 @@
     {id:'breakout-ice',name:'Ice Breaker',game:'Breakout',type:'gameSkin',gameKey:'breakout',skin:'ice',price:340,desc:'Cool the whole Breakout arena into icy blue tones.',preview:['#d9f6ff','#60b8ff']},
 
     {id:'memory-holo',name:'Hologram Cards',game:'Memory Match',type:'gameSkin',gameKey:'memory',skin:'holo',price:180,desc:'Holographic cyan and violet memory cards.',preview:['#69e6ff','#a57cff']},
-    {id:'memory-galaxy',name:'Galaxy Deck',game:'Memory Match',type:'gameSkin',gameKey:'memory',skin:'galaxy',price:350,desc:'A deep-space purple deck with glowing cards.',preview:['#754fff','#df88ff']}
+    {id:'memory-galaxy',name:'Galaxy Deck',game:'Memory Match',type:'gameSkin',gameKey:'memory',skin:'galaxy',price:350,desc:'A deep-space purple deck with glowing cards.',preview:['#754fff','#df88ff']},
+
+    {id:'pool-neon',name:'Neon Table',game:'8 Ball Pool',type:'gameSkin',gameKey:'pool',skin:'neon',price:240,desc:'Electric teal felt and midnight-blue rails for Pool.',preview:['#17a9a0','#243d7c']},
+    {id:'pool-royal',name:'Royal Blue Table',game:'8 Ball Pool',type:'gameSkin',gameKey:'pool',skin:'royal',price:380,desc:'Deep royal-blue felt with warm tournament rails.',preview:['#2d64b7','#d19a4f']},
+    {id:'pool-ice',name:'Ice Table',game:'8 Ball Pool',type:'gameSkin',gameKey:'pool',skin:'ice',price:520,desc:'A bright frozen-blue championship table.',preview:['#7fdcf1','#e8fbff']}
   ];
   const defaults={coins:150,owned:['theme-midnight'],equipped:{theme:'theme-midnight'},lastDaily:'',earned:0,spent:0};
   function fresh(){return JSON.parse(JSON.stringify(defaults))}
