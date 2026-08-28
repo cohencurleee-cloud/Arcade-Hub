@@ -1,7 +1,7 @@
 (()=>{
   const UNLOCK='arcadeAdminUnlocked', SETTINGS='arcadeAdminSettings', CODE='1299';
   let panel,button,tries=[];
-  const defaults={god:false,speed:1,snakeAuto:false,snakeRealistic:true};
+  const defaults={god:false,speed:1,snakeAuto:false};
   function settings(){try{return {...defaults,...JSON.parse(localStorage.getItem(SETTINGS)||'{}')}}catch{return {...defaults}}}
   function save(s){localStorage.setItem(SETTINGS,JSON.stringify(s));window.dispatchEvent(new CustomEvent('arcade-admin-change',{detail:{settings:s}}))}
   function command(name){window.dispatchEvent(new CustomEvent('arcade-admin-command',{detail:{command:name,settings:settings()}}))}
@@ -18,15 +18,14 @@
   function openPanel(){
     css();if(panel)panel.remove();
     const s=settings(),type=pageType();
-    const snakeRows=(type==='snake'||type==='hub')?`<div class="row"><span><b>Snake autopilot</b><small>Automatically hunts apples and avoids trapping itself when possible.</small></span><input id="aaSnakeAuto" type="checkbox" ${s.snakeAuto?'checked':''}></div><div class="row"><span><b>Realistic snake style</b><small>Rounded rainbow body, eyes, grass grid and detailed apples. Turn off for classic blocks.</small></span><input id="aaSnakeRealistic" type="checkbox" ${s.snakeRealistic?'checked':''}></div>`:'';
+    const snakeRow=(type==='snake'||type==='hub')?`<div class="row"><span><b>Snake autopilot</b><small>Automatically hunts apples and avoids trapping itself when possible.</small></span><input id="aaSnakeAuto" type="checkbox" ${s.snakeAuto?'checked':''}></div>`:'';
     panel=document.createElement('div');panel.id='arcadeAdminPanel';
-    panel.innerHTML=`<div class="box"><h2>Admin Panel</h2><div class="muted">Unlocked for every Arcade Hub game.</div><div class="row"><b>God mode</b><input id="aaGod" type="checkbox" ${s.god?'checked':''}></div><div class="row"><b>Game speed</b><span><input id="aaSpeed" type="range" min="0.5" max="2" step="0.1" value="${s.speed}"> <b id="aaSpeedText">${Number(s.speed).toFixed(1)}x</b></span></div>${snakeRows}<div class="buttons"><button id="aaBoost">Boost</button><button id="aaReset">Reset game</button><button id="aaClose">Close</button><button id="aaLock">Lock admin</button></div></div>`;
+    panel.innerHTML=`<div class="box"><h2>Admin Panel</h2><div class="muted">Unlocked for every Arcade Hub game.</div><div class="row"><b>God mode</b><input id="aaGod" type="checkbox" ${s.god?'checked':''}></div><div class="row"><b>Game speed</b><span><input id="aaSpeed" type="range" min="0.5" max="2" step="0.1" value="${s.speed}"> <b id="aaSpeedText">${Number(s.speed).toFixed(1)}x</b></span></div>${snakeRow}<div class="buttons"><button id="aaBoost">Boost</button><button id="aaReset">Reset game</button><button id="aaClose">Close</button><button id="aaLock">Lock admin</button></div></div>`;
     document.body.appendChild(panel);
-    const god=panel.querySelector('#aaGod'),speed=panel.querySelector('#aaSpeed'),label=panel.querySelector('#aaSpeedText'),snake=panel.querySelector('#aaSnakeAuto'),realistic=panel.querySelector('#aaSnakeRealistic');
+    const god=panel.querySelector('#aaGod'),speed=panel.querySelector('#aaSpeed'),label=panel.querySelector('#aaSpeedText'),snake=panel.querySelector('#aaSnakeAuto');
     god.onchange=()=>save({...settings(),god:god.checked});
     speed.oninput=()=>{label.textContent=Number(speed.value).toFixed(1)+'x';save({...settings(),speed:+speed.value})};
     if(snake)snake.onchange=()=>save({...settings(),snakeAuto:snake.checked});
-    if(realistic)realistic.onchange=()=>save({...settings(),snakeRealistic:realistic.checked});
     panel.querySelector('#aaBoost').onclick=()=>command('boost');
     panel.querySelector('#aaReset').onclick=()=>command('reset');
     panel.querySelector('#aaClose').onclick=()=>{panel.remove();panel=null};
