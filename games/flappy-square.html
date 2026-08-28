@@ -26,6 +26,8 @@ let birdY=330,vel=0,pipes=[],score=0,best=+(localStorage.getItem('flappyBest')||
 let aiPipe=null,aiTargetY=330,levelFlash=0,lastLevel=1;
 function admin(){return window.ArcadeAdmin?.getSettings?.()||{god:false,speed:1,flappyAuto:false}}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function speedValue(){const v=Number(admin().speed);return Number.isFinite(v)&&v>0?v:1}
+function speedText(v){v=Number(v);if(v>=1000000||v<.001)return v.toExponential(2);return String(v)}
 function difficulty(){return 1+Math.floor(score/5)}
 function pipeGap(){
   const lv=difficulty(),early=Math.min(10,lv-1),late=Math.max(0,lv-11);
@@ -88,7 +90,7 @@ function runAIPilot(step){
   if(center>GROUND-82)shouldFlap=true;
   if(center<52)shouldFlap=false;
   if(shouldFlap&&autoCooldown<=.0001)flap();
-  hint.textContent=`AI PILOT • jumping • ${Number(a.speed||1).toFixed(1)}x • Lv ${difficulty()}`
+  hint.textContent=`AI PILOT • jumping • ${speedText(speedValue())}x • Lv ${difficulty()}`
 }
 function drawCloud(x,y,s){ctx.fillStyle='rgba(255,255,255,.72)';ctx.fillRect(x,y,34*s,15*s);ctx.fillRect(x+8*s,y-9*s,22*s,12*s);ctx.fillRect(x+18*s,y-15*s,18*s,18*s)}
 function drawBackground(t){ctx.fillStyle='#70c5ce';ctx.fillRect(0,0,W,H);drawCloud(25,165,1);drawCloud(280,105,.85);drawCloud(185,260,.65);ctx.fillStyle='#d9f0d2';for(let i=0;i<8;i++){const xx=((i*66-(t*.012)%66)+66)%528-48,h=45+(i%3)*18;ctx.fillRect(xx,GROUND-92-h,48,h);ctx.fillStyle='#b5ddb6';ctx.fillRect(xx+8,GROUND-83-h,8,h-7);ctx.fillStyle='#d9f0d2'}ctx.fillStyle='#87c56b';ctx.fillRect(0,GROUND-20,W,20);ctx.fillStyle='#ded895';ctx.fillRect(0,GROUND,W,H-GROUND);ctx.fillStyle='#8fcf55';ctx.fillRect(0,GROUND,W,12);ctx.fillStyle='#5f9b35';ctx.fillRect(0,GROUND+12,W,5);ctx.fillStyle='rgba(255,255,255,.25)';for(let xx=-20;xx<W;xx+=28)ctx.fillRect(xx+(t*.04)%28,GROUND+23,14,4)}
@@ -109,7 +111,7 @@ function physicsStep(step){
   if(!a.flappyAuto)autoCooldown=Math.max(0,autoCooldown-step);
   levelFlash=Math.max(0,levelFlash-step);
   vel=Math.min(MAX_FALL,vel+GRAVITY*step);birdY+=vel*step;wing=Math.max(0,wing-step*7);
-  spawn+=step;const pt=pipeTime();while(spawn>=pt){spawn-=pt;addPipe()}
+  spawn+=step;const pt=pipeTime();if(spawn>=pt){spawn%=pt;addPipe()}
   const sp=pipeSpeed();
   for(const p of pipes){
     p.x-=sp*step;
@@ -123,7 +125,12 @@ function physicsStep(step){
   if(birdY<0){if(a.god){birdY=0;vel=0}else die()}
   if(birdY+BH>GROUND){if(a.god){birdY=GROUND-BH;vel=-160}else die()}
 }
-function update(dt){const speed=clamp(Number(admin().speed)||1,.5,20),total=dt*speed,maxStep=.004,n=Math.max(1,Math.ceil(total/maxStep)),step=total/n;for(let i=0;i<n;i++){physicsStep(step);if(state==='dead')break}}
+function update(dt){
+  const speed=speedValue(),total=dt*speed;
+  if(!Number.isFinite(total)||total<=0)return;
+  const maxStep=.004,maxSubsteps=240,n=Math.max(1,Math.min(maxSubsteps,Math.ceil(total/maxStep))),step=total/n;
+  for(let i=0;i<n;i++){physicsStep(step);if(state==='dead')break}
+}
 function frame(now){const dt=Math.min(.033,(now-last)/1000||0);last=now;update(dt);drawBackground(now);pipes.forEach(drawPipe);drawAIGuide();drawBird();drawUI();requestAnimationFrame(frame)}
 c.addEventListener('pointerdown',e=>{e.preventDefault();if(!admin().flappyAuto)startFlap()},{passive:false});
 addEventListener('keydown',e=>{if(e.code==='Space'&&!admin().flappyAuto){e.preventDefault();startFlap()}});
