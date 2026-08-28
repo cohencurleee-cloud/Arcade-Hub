@@ -22,63 +22,121 @@ canvas{display:block;width:min(100vw,432px);height:min(100vh,768px);max-height:1
 const c=document.getElementById('c'),ctx=c.getContext('2d');
 const W=c.width,H=c.height,GROUND=690,BX=92,BW=44,BH=32,PIPE_W=72;
 const GRAVITY=1450,FLAP=-430,MAX_FALL=680,PIPE_SPEED=155,PIPE_GAP=178,PIPE_TIME=1.48;
-let birdY=330,vel=0,pipes=[],score=0,best=+(localStorage.getItem('flappyBest')||0),state='ready',spawn=0,last=performance.now(),wing=0,autoCooldown=0,deathAt=0,autoTargetY=330,autoPipe=null;
+const BIRD_CX=BX+BW/2,BIRD_LEFT=BX+5,BIRD_RIGHT=BX+BW-6,HALF_H=(BH-8)/2;
+let birdY=330,vel=0,pipes=[],score=0,best=+(localStorage.getItem('flappyBest')||0),state='ready',spawn=0,last=performance.now(),wing=0,autoCooldown=0,deathAt=0;
+let aiThinkTimer=0,aiTargetY=330,aiPipe=null,aiPath=[];
 function admin(){return window.ArcadeAdmin?.getSettings?.()||{god:false,speed:1,flappyAuto:false}}
-function reset(){birdY=330;vel=0;pipes=[];score=0;spawn=.65;state='ready';last=performance.now();autoCooldown=0;deathAt=0;autoTargetY=330;autoPipe=null}
+function reset(){birdY=330;vel=0;pipes=[];score=0;spawn=.65;state='ready';last=performance.now();autoCooldown=0;deathAt=0;aiThinkTimer=0;aiTargetY=330;aiPipe=null;aiPath=[]}
 function flap(){vel=FLAP;wing=1;autoCooldown=.105}
 function startFlap(){if(state==='dead'){reset();state='playing'}else if(state==='ready')state='playing';flap()}
 function die(){if(admin().god)return;state='dead';deathAt=performance.now();best=Math.max(best,score);localStorage.setItem('flappyBest',best)}
 function addPipe(){const margin=112,min=margin+PIPE_GAP/2,max=GROUND-margin-PIPE_GAP/2,gapY=min+Math.random()*(max-min);pipes.push({x:W+25,gapY,passed:false})}
-function collision(p){const left=BX+5,right=BX+BW-6,top=birdY+4,bottom=birdY+BH-4,pt=p.gapY-PIPE_GAP/2,pb=p.gapY+PIPE_GAP/2;return right>p.x&&left<p.x+PIPE_W&&(top<pt||bottom>pb)}
-function nextPipes(){return pipes.filter(p=>p.x+PIPE_W>BX+4).sort((a,b)=>a.x-b.x)}
-function scanGap(p){const buffer=BH*.62;return{top:p.gapY-PIPE_GAP/2+buffer,bottom:p.gapY+PIPE_GAP/2-buffer,center:p.gapY}}
-function predictedCenter(t){const cy=birdY+BH/2;return cy+vel*t+.5*GRAVITY*t*t}
-function runAutopilot(dt){
+function collision(p){const top=birdY+4,bottom=birdY+BH-4,pt=p.gapY-PIPE_GAP/2,pb=p.gapY+PIPE_GAP/2;return BIRD_RIGHT>p.x&&BIRD_LEFT<p.x+PIPE_W&&(top<pt||bottom>pb)}
+function nextPipes(){return pipes.filter(p=>p.x+PIPE_W>BIRD_LEFT-4).sort((a,b)=>a.x-b.x)}
+function safeGap(p){const margin=HALF_H+8;return{top:p.gapY-PIPE_GAP/2+margin,bottom:p.gapY+PIPE_GAP/2-margin,center:p.gapY}}
+function simRisk(y,vy,t,scrollSpeed){
+  if(y-HALF_H<5||y+HALF_H>GROUND-5)return-1e9;
+  let reward=7-Math.abs(vy)*.0015;
+  const future=nextPipes().slice(0,3);
+  if(!future.length){reward-=Math.abs(y-330)*.025;return reward}
+  let nearest=null,nearestDx=1e9;
+  for(const p of future){
+    const px=p.x-scrollSpeed*t,dx=(px+PIPE_W/2)-BIRD_CX,g=safeGap(p);
+    if(px+PIPE_W>BIRD_LEFT&&px<BIRD_RIGHT){
+      if(y-HALF_H<g.top||y+HALF_H>g.bottom)return-1e9;
+      const edge=Math.min((y-HALF_H)-g.top,g.bottom-(y+HALF_H));
+      reward+=80+Math.max(0,edge)*1.2;
+    }
+    if(dx>-PIPE_W&&Math.abs(dx)<nearestDx){nearest=p;nearestDx=Math.abs(dx)}
+    if(dx>-30&&dx<230){
+      const proximity=1-Math.min(1,Math.max(0,dx)/230);
+      reward-=Math.abs(y-g.center)*.075*(.35+proximity*1.8);
+      const edge=Math.min((y-HALF_H)-g.top,g.bottom-(y+HALF_H));
+      if(edge<14)reward-=(14-edge)*3.5*Math.max(.25,proximity);
+    }
+  }
+  if(nearest){const g=safeGap(nearest);reward-=Math.abs(y-g.center)*.015}
+  return reward
+}
+function chooseAIAction(){
+  const a=admin(),scrollSpeed=PIPE_SPEED*Math.max(.5,a.speed||1),step=.075,steps=20,beamWidth=42;
+  const center=birdY+BH/2,initialCool=Math.max(0,Math.ceil(autoCooldown/step));
+  let beam=[{y:center,vy:vel,cool:initialCool,score:0,first:0,path:[]}];
+  for(let i=0;i<steps;i++){
+    const t=(i+1)*step,next=[];
+    for(const s of beam){
+      const actions=s.cool<=0?[0,1]:[0];
+      for(const action of actions){
+        let nv=action?FLAP:s.vy;
+        nv=Math.min(MAX_FALL,nv+GRAVITY*step);
+        const ny=s.y+nv*step;
+        const risk=simRisk(ny,nv,t,scrollSpeed);
+        if(risk<=-1e8)continue;
+        const flapCost=action?2.8:0;
+        const ns={y:ny,vy:nv,cool:action?2:Math.max(0,s.cool-1),score:s.score+risk-flapCost,first:i===0?action:s.first,path:s.path.concat([{y:ny,t}])};
+        next.push(ns)
+      }
+    }
+    if(!next.length)break;
+    next.sort((a,b)=>b.score-a.score);
+    beam=next.slice(0,beamWidth)
+  }
+  const best=beam[0];
+  aiPath=best?best.path:[];
+  return best?best.first:0
+}
+function updateAITarget(){
+  const p=nextPipes()[0]||null;aiPipe=p;
+  aiTargetY=p?p.gapY:330;
+}
+function runAIPilot(dt){
   const a=admin();
-  if(!a.flappyAuto){hint.textContent='Tap to flap';autoPipe=null;return}
+  if(!a.flappyAuto){hint.textContent='Tap to flap';aiPipe=null;aiPath=[];return}
   autoCooldown=Math.max(0,autoCooldown-dt);
   if(state==='dead'){
-    hint.textContent='AUTOPILOT • restarting';
-    if(performance.now()-deathAt>420){reset();state='playing';flap()}
+    hint.textContent='AI PILOT • restarting';
+    if(performance.now()-deathAt>360){reset();state='playing';flap()}
     return
   }
   if(state==='ready'){state='playing';flap();return}
-  const list=nextPipes(),p=list[0];
-  autoPipe=p||null;
-  const cy=birdY+BH/2,scrollSpeed=PIPE_SPEED*Math.max(.5,a.speed||1);
-  let target=330,safeTop=120,safeBottom=GROUND-70,timeToGap=1;
-  if(p){
-    const gap=scanGap(p),pipeCenterX=p.x+PIPE_W/2,birdCenterX=BX+BW/2;
-    safeTop=gap.top;safeBottom=gap.bottom;timeToGap=Math.max(0,(pipeCenterX-birdCenterX)/scrollSpeed);
-    if(timeToGap>.8){
-      const blend=Math.max(0,Math.min(1,(1.45-timeToGap)/.65));
-      target=330+(gap.center-330)*blend;
-    }else target=gap.center;
-    const next=list[1];
-    if(timeToGap<.18&&next)target=gap.center*.72+next.gapY*.28;
+  updateAITarget();
+  hint.textContent=aiPipe?'AI PILOT • planning opening':'AI PILOT • scanning';
+  aiThinkTimer-=dt;
+  if(aiThinkTimer<=0){
+    aiThinkTimer=.045;
+    const center=birdY+BH/2;
+    if(center>GROUND-78&&autoCooldown<=0){flap();return}
+    const act=chooseAIAction();
+    if(act&&autoCooldown<=0)flap()
   }
-  autoTargetY=target;
-  hint.textContent=p?`AUTOPILOT • gap ${Math.round(target)}`:'AUTOPILOT • scanning';
-  const horizon=Math.max(.12,Math.min(.52,timeToGap*.72));
-  const predicted=predictedCenter(horizon);
-  const dangerBottom=safeBottom-8,dangerTop=safeTop+8;
-  const fallingFast=vel>220;
-  const needLift=predicted>target+12||cy>dangerBottom||(fallingFast&&cy>target-10);
-  const tooHigh=cy<dangerTop||predicted<target-28;
-  if(needLift&&!tooHigh&&autoCooldown<=0)flap();
-  if(cy>GROUND-92&&autoCooldown<=0)flap();
-  if(cy<54&&vel<0){vel=Math.max(vel,-160);autoCooldown=Math.max(autoCooldown,.08)}
 }
 function drawCloud(x,y,s){ctx.fillStyle='rgba(255,255,255,.72)';ctx.fillRect(x,y,34*s,15*s);ctx.fillRect(x+8*s,y-9*s,22*s,12*s);ctx.fillRect(x+18*s,y-15*s,18*s,18*s)}
 function drawBackground(t){ctx.fillStyle='#70c5ce';ctx.fillRect(0,0,W,H);drawCloud(25,165,1);drawCloud(280,105,.85);drawCloud(185,260,.65);ctx.fillStyle='#d9f0d2';for(let i=0;i<8;i++){const xx=((i*66-(t*.012)%66)+66)%528-48,h=45+(i%3)*18;ctx.fillRect(xx,GROUND-92-h,48,h);ctx.fillStyle='#b5ddb6';ctx.fillRect(xx+8,GROUND-83-h,8,h-7);ctx.fillStyle='#d9f0d2'}ctx.fillStyle='#87c56b';ctx.fillRect(0,GROUND-20,W,20);ctx.fillStyle='#ded895';ctx.fillRect(0,GROUND,W,H-GROUND);ctx.fillStyle='#8fcf55';ctx.fillRect(0,GROUND,W,12);ctx.fillStyle='#5f9b35';ctx.fillRect(0,GROUND+12,W,5);ctx.fillStyle='rgba(255,255,255,.25)';for(let xx=-20;xx<W;xx+=28)ctx.fillRect(xx+(t*.04)%28,GROUND+23,14,4)}
 function drawPipe(p){const topH=p.gapY-PIPE_GAP/2,bottomY=p.gapY+PIPE_GAP/2;pipePart(p.x,0,PIPE_W,topH,true);pipePart(p.x,bottomY,PIPE_W,GROUND-bottomY,false)}
 function pipePart(x,y,w,h,top){if(h<=0)return;ctx.fillStyle='#3d3d3d';ctx.fillRect(x-3,y,w+6,h);ctx.fillStyle='#76b947';ctx.fillRect(x,y,w,h);ctx.fillStyle='#a8f05a';ctx.fillRect(x+8,y,11,h);ctx.fillStyle='#4c8430';ctx.fillRect(x+w-13,y,10,h);const capH=36,capY=top?Math.max(0,y+h-capH):y;ctx.fillStyle='#3d3d3d';ctx.fillRect(x-9,capY-3,w+18,capH+6);ctx.fillStyle='#76b947';ctx.fillRect(x-6,capY,w+12,capH);ctx.fillStyle='#b0f35d';ctx.fillRect(x+4,capY,10,capH);ctx.fillStyle='#4d8530';ctx.fillRect(x+w-4,capY,10,capH)}
 function drawBird(){ctx.save();ctx.translate(BX+BW/2,birdY+BH/2);const rot=Math.max(-.38,Math.min(.85,vel/760));ctx.rotate(rot);ctx.translate(-BW/2,-BH/2);ctx.fillStyle='#111';ctx.fillRect(0,5,38,23);ctx.fillRect(6,1,25,30);ctx.fillRect(28,8,16,17);ctx.fillStyle='#f9e713';ctx.fillRect(4,8,24,18);ctx.fillRect(9,4,18,24);ctx.fillStyle='#ffb400';ctx.fillRect(5,wing?18:20,19,8);ctx.fillStyle='#fff';ctx.fillRect(23,4,13,14);ctx.fillStyle='#f1f1f1';ctx.fillRect(25,7,10,12);ctx.fillStyle='#111';ctx.fillRect(32,8,4,8);ctx.fillStyle='#f15a24';ctx.fillRect(32,17,12,7);ctx.fillRect(29,22,12,6);ctx.restore()}
-function drawAutoGuide(){if(!admin().flappyAuto||!autoPipe)return;const gap=scanGap(autoPipe);ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle='rgba(255,255,255,.42)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(BX+BW+8,autoTargetY);ctx.lineTo(Math.max(BX+BW+8,autoPipe.x-5),autoTargetY);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(autoPipe.x+4,gap.top,PIPE_W-8,Math.max(2,gap.bottom-gap.top));ctx.restore()}
+function drawAIGuide(){
+  if(!admin().flappyAuto)return;
+  if(aiPipe){const g=safeGap(aiPipe);ctx.save();ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(aiPipe.x+3,g.top,PIPE_W-6,Math.max(2,g.bottom-g.top));ctx.strokeStyle='rgba(255,255,255,.4)';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(BX+BW+6,aiTargetY);ctx.lineTo(Math.max(BX+BW+6,aiPipe.x-4),aiTargetY);ctx.stroke();ctx.setLineDash([]);ctx.restore()}
+  if(aiPath.length){ctx.save();ctx.fillStyle='rgba(255,255,255,.42)';const scroll=PIPE_SPEED*Math.max(.5,admin().speed||1);for(let i=0;i<aiPath.length;i+=2){const p=aiPath[i],xx=BIRD_CX+scroll*p.t*.18;ctx.beginPath();ctx.arc(Math.min(W-8,xx),p.y,2,0,Math.PI*2);ctx.fill()}ctx.restore()}
+}
 function centerText(text,y,size){ctx.textAlign='center';ctx.font=`900 ${size}px system-ui`;ctx.lineWidth=5;ctx.strokeStyle='rgba(0,0,0,.35)';ctx.strokeText(text,W/2,y);ctx.fillStyle='#fff';ctx.fillText(text,W/2,y)}
-function drawUI(){centerText(String(score),72,42);if(state==='ready'){centerText('FLAPPY BIRD',250,36);centerText(admin().flappyAuto?'Autopilot scanning':'Tap to start',305,21)}if(state==='dead'){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(65,245,302,190);centerText('GAME OVER',292,32);ctx.textAlign='left';ctx.font='800 19px system-ui';ctx.fillStyle='#fff';ctx.fillText('Score',105,345);ctx.fillText('Best',105,385);ctx.textAlign='right';ctx.fillText(score,325,345);ctx.fillText(best,325,385);centerText(admin().flappyAuto?'Autopilot restarting…':'Tap to restart',420,16)}}
-function update(dt){runAutopilot(dt);if(state!=='playing')return;const a=admin();vel=Math.min(MAX_FALL,vel+GRAVITY*dt);birdY+=vel*dt;wing=Math.max(0,wing-dt*7);spawn+=dt*a.speed;if(spawn>=PIPE_TIME){spawn-=PIPE_TIME;addPipe()}for(const p of pipes){p.x-=PIPE_SPEED*dt*a.speed;if(!p.passed&&p.x+PIPE_W<BX){p.passed=true;score++}if(collision(p))die()}pipes=pipes.filter(p=>p.x>-PIPE_W-20);if(birdY<0){if(a.god){birdY=0;vel=0}else die()}if(birdY+BH>GROUND){if(a.god){birdY=GROUND-BH;vel=-160}else die()}}
-function frame(now){const dt=Math.min(.033,(now-last)/1000||0);last=now;update(dt);drawBackground(now);pipes.forEach(drawPipe);drawAutoGuide();drawBird();drawUI();requestAnimationFrame(frame)}
+function drawUI(){centerText(String(score),72,42);if(state==='ready'){centerText('FLAPPY BIRD',250,36);centerText(admin().flappyAuto?'AI pilot ready':'Tap to start',305,21)}if(state==='dead'){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(65,245,302,190);centerText('GAME OVER',292,32);ctx.textAlign='left';ctx.font='800 19px system-ui';ctx.fillStyle='#fff';ctx.fillText('Score',105,345);ctx.fillText('Best',105,385);ctx.textAlign='right';ctx.fillText(score,325,345);ctx.fillText(best,325,385);centerText(admin().flappyAuto?'AI restarting…':'Tap to restart',420,16)}}
+function update(dt){
+  runAIPilot(dt);
+  if(state!=='playing')return;
+  const a=admin();
+  vel=Math.min(MAX_FALL,vel+GRAVITY*dt);
+  birdY+=vel*dt;
+  wing=Math.max(0,wing-dt*7);
+  spawn+=dt*a.speed;
+  if(spawn>=PIPE_TIME){spawn-=PIPE_TIME;addPipe()}
+  for(const p of pipes){p.x-=PIPE_SPEED*dt*a.speed;if(!p.passed&&p.x+PIPE_W<BX){p.passed=true;score++}if(collision(p))die()}
+  pipes=pipes.filter(p=>p.x>-PIPE_W-20);
+  if(birdY<0){if(a.god){birdY=0;vel=0}else die()}
+  if(birdY+BH>GROUND){if(a.god){birdY=GROUND-BH;vel=-160}else die()}
+}
+function frame(now){const dt=Math.min(.033,(now-last)/1000||0);last=now;update(dt);drawBackground(now);pipes.forEach(drawPipe);drawAIGuide();drawBird();drawUI();requestAnimationFrame(frame)}
 c.addEventListener('pointerdown',e=>{e.preventDefault();if(!admin().flappyAuto)startFlap()},{passive:false});
 addEventListener('keydown',e=>{if(e.code==='Space'&&!admin().flappyAuto){e.preventDefault();startFlap()}});
 restart.onclick=reset;
