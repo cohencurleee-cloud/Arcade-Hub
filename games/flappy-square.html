@@ -114,7 +114,7 @@ function physicsStep(step){
   if(birdY<0){if(a.god){birdY=0;vel=0}else die()}
   if(birdY+BH>GROUND){if(a.god){birdY=GROUND-BH;vel=-160}else die()}
 }
-function update(dt){const speed=clamp(Number(admin().speed)||1,.5,2),total=dt*speed,maxStep=.004,n=Math.max(1,Math.ceil(total/maxStep)),step=total/n;for(let i=0;i<n;i++){physicsStep(step);if(state==='dead')break}}
+function update(dt){const speed=clamp(Number(admin().speed)||1,.5,20),total=dt*speed,maxStep=.004,n=Math.max(1,Math.ceil(total/maxStep)),step=total/n;for(let i=0;i<n;i++){physicsStep(step);if(state==='dead')break}}
 function frame(now){const dt=Math.min(.033,(now-last)/1000||0);last=now;update(dt);drawBackground(now);pipes.forEach(drawPipe);drawAIGuide();drawBird();drawUI();requestAnimationFrame(frame)}
 c.addEventListener('pointerdown',e=>{e.preventDefault();if(!admin().flappyAuto)startFlap()},{passive:false});
 addEventListener('keydown',e=>{if(e.code==='Space'&&!admin().flappyAuto){e.preventDefault();startFlap()}});
