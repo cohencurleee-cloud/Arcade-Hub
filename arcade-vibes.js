@@ -89,11 +89,16 @@
 
   function init(){
     if(document.getElementById('arcade-vibes-style'))return;configureIOSAudio();css();mountEffects();mountUI();
-    const unlock=async()=>{configureIOSAudio();if(enabled)await startAudio(false)};
-    addEventListener('pointerdown',unlock,{once:true,passive:true});addEventListener('touchstart',unlock,{once:true,passive:true});addEventListener('keydown',unlock,{once:true});
+    const wake=async e=>{if(e?.target?.closest?.('#arcadeAudioButton'))return;configureIOSAudio();if(enabled&&!started)await startAudio(false)};
+    addEventListener('pointerdown',wake,{passive:true});
+    addEventListener('touchstart',wake,{passive:true});
+    addEventListener('click',wake,{passive:true});
+    addEventListener('pageshow',()=>{if(enabled&&!started)startAudio(false)});
+    addEventListener('focus',()=>{if(enabled&&!started)startAudio(false)});
     document.addEventListener('click',e=>{if(e.target.closest('button,a,.card')&&e.target!==audioButton)uiClick()});
-    document.addEventListener('visibilitychange',()=>{if(document.hidden)stopAudio()});
-    window.ArcadeVibes={tone,play:async name=>{if(!enabled)return;configureIOSAudio();await resumeAudio();if(name==='flap'&&game==='flappy'){birdChirp();return}const map={score:[1047,.07,.30],hit:[145,.14,.54],win:[1175,.18,.42],level:[880,.11,.34]};const v=map[name]||[520,.07,.26];tone(v[0],v[1],v[2],'sine')}}
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)stopAudio();else if(enabled)startAudio(false)});
+    window.ArcadeVibes={tone,start:startAudio,play:async name=>{if(!enabled)return;configureIOSAudio();await resumeAudio();if(name==='flap'&&game==='flappy'){birdChirp();return}const map={score:[1047,.07,.30],hit:[145,.14,.54],win:[1175,.18,.42],level:[880,.11,.34]};const v=map[name]||[520,.07,.26];tone(v[0],v[1],v[2],'sine')}};
+    if(enabled)startAudio(false);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
