@@ -38,7 +38,7 @@ function choose(player){
   const base=plans(player).slice(0,7);let best=null;
   for(const q of base){
     const powers=[clamp(q.p-7,22,100),q.p,clamp(q.p+9,22,100),100];
-    const offsets=[-.0045,0,.0045];
+    const spread=.0045/currentCue().control,offsets=[-spread,0,spread];
     for(const pp of powers)for(const off of offsets){
       const sim=simulate(q.a+off,pp,0,6.5),sc=scoreSimulation(sim,q,player);
       if(!best||sc<best.score)best={...q,a:q.a+off,p:pp,spin:0,score:sc,verified:!!sim?.w.find(b=>b.n===q.t)?.p,sim}
