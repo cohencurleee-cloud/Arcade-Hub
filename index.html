@@ -68,15 +68,19 @@ const adminHints=[
   'Hint 3: Five quick taps opens a hidden lock.',
   'Final hint: The lock code is 1299.'
 ];
-let adminHintStep=Number(sessionStorage.getItem('arcadeAdminHintStep')||0),titleTapCount=0,titleTapTimer=null;
-function showAdminHint(){const i=Math.min(adminHintStep,adminHints.length-1);msg(adminHints[i]);adminHintStep=Math.min(adminHints.length-1,adminHintStep+1);sessionStorage.setItem('arcadeAdminHintStep',String(adminHintStep))}
-toolsBtn.onclick=e=>{e.stopPropagation();toolsMenu.classList.toggle('hidden');adminTool.textContent=window.ArcadeAdmin?.isUnlocked?.()?'Admin panel':'Admin hint'};
+const HINT_COOLDOWN=5*60*1000,HINT_STEP_KEY='arcadeAdminHintStepV2',HINT_TIME_KEY='arcadeAdminHintNextV2';
+let adminHintStep=Math.max(0,Math.min(adminHints.length-1,Number(localStorage.getItem(HINT_STEP_KEY)||0))),titleTapCount=0,titleTapTimer=null;
+function hintCooldownLeft(){return Math.max(0,Number(localStorage.getItem(HINT_TIME_KEY)||0)-Date.now())}
+function waitText(ms){const total=Math.max(1,Math.ceil(ms/1000)),m=Math.floor(total/60),s=total%60;return m?`${m}m ${s}s`:`${s}s`}
+function refreshAdminToolLabel(){if(window.ArcadeAdmin?.isUnlocked?.()){adminTool.textContent='Admin panel';return}const left=hintCooldownLeft();adminTool.textContent=left>0?`Admin hint • ${Math.ceil(left/60000)}m`:'Admin hint'}
+function showAdminHint(){const left=hintCooldownLeft();if(left>0){msg(`Next admin hint in ${waitText(left)}`);return}const i=Math.min(adminHintStep,adminHints.length-1);msg(adminHints[i]);if(i<adminHints.length-1){adminHintStep=i+1;localStorage.setItem(HINT_STEP_KEY,String(adminHintStep));localStorage.setItem(HINT_TIME_KEY,String(Date.now()+HINT_COOLDOWN))}refreshAdminToolLabel()}
+toolsBtn.onclick=e=>{e.stopPropagation();toolsMenu.classList.toggle('hidden');refreshAdminToolLabel()};
 document.addEventListener('click',e=>{if(!toolsMenu.contains(e.target)&&e.target!==toolsBtn)toolsMenu.classList.add('hidden')});
 musicTool.onclick=async()=>{if(window.ArcadeVibes?.toggle)await window.ArcadeVibes.toggle(true);else window.dispatchEvent(new Event('arcade-vibes-toggle'));toolsMenu.classList.add('hidden')};
 aiTool.onclick=()=>{document.getElementById('arcadeAIButton')?.click();toolsMenu.classList.add('hidden')};
 adminTool.onclick=()=>{if(window.ArcadeAdmin?.isUnlocked?.()){document.getElementById('arcadeAdminBtn')?.click()}else showAdminHint();toolsMenu.classList.add('hidden')};
 hubTitle.addEventListener('click',()=>{if(window.ArcadeAdmin?.isUnlocked?.())return;titleTapCount++;clearTimeout(titleTapTimer);if(titleTapCount===2)msg('You found something. Keep tapping quickly.');if(titleTapCount===4)msg('Almost there… one more.');titleTapTimer=setTimeout(()=>titleTapCount=0,2600)});
-applyTheme();syncWallet();renderFilters();setFeature();draw();
+applyTheme();syncWallet();renderFilters();setFeature();draw();refreshAdminToolLabel();
 </script>
 </body>
 </html>
