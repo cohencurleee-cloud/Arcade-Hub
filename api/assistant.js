@@ -22,6 +22,11 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Send a message first.' });
     }
 
+    // Llama 3.3 70B is Enterprise-only on Groq now, so use a production model
+    // that works on standard Groq developer access. You can override this in
+    // Vercel later with GROQ_MODEL if you want to try another supported model.
+    const model = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
+
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -29,9 +34,9 @@ module.exports = async function handler(req, res) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model,
         temperature: 0.65,
-        max_completion_tokens: 650,
+        max_completion_tokens: 700,
         messages: [
           {
             role: 'system',
@@ -45,12 +50,16 @@ module.exports = async function handler(req, res) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = data?.error?.message || data?.error || 'Groq request failed.';
-      return res.status(response.status).json({ error: String(detail).slice(0, 500) });
+      return res.status(response.status).json({
+        error: String(detail).slice(0, 500),
+        model
+      });
     }
 
     const text = data?.choices?.[0]?.message?.content;
     if (!text) return res.status(502).json({ error: 'Groq returned an empty response.' });
-    return res.status(200).json({ reply: text });
+
+    return res.status(200).json({ reply: text, model });
   } catch (error) {
     return res.status(500).json({ error: 'Arcade AI failed to respond.' });
   }
