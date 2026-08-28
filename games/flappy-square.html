@@ -23,17 +23,17 @@ const W=c.width,H=c.height,GROUND=690,BX=92,BW=44,BH=32,PIPE_W=72;
 const GRAVITY=1450,FLAP=-430,MAX_FALL=680,BASE_PIPE_SPEED=155,BASE_PIPE_GAP=178,BASE_PIPE_TIME=1.48,FLAP_LOCK=.095;
 const BIRD_LEFT=BX+5,BIRD_RIGHT=BX+BW-6,BIRD_CX=BX+BW/2;
 let birdY=330,vel=0,pipes=[],score=0,best=+(localStorage.getItem('flappyBest')||0),state='ready',spawn=.65,last=performance.now(),wing=0,autoCooldown=0,deathAt=0,lastGapY=330;
-let aiPipe=null,aiTargetY=330;
+let aiPipe=null,aiTargetY=330,levelFlash=0,lastLevel=1;
 function admin(){return window.ArcadeAdmin?.getSettings?.()||{god:false,speed:1,flappyAuto:false}}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
-function difficulty(){return Math.min(10,1+Math.floor(score/5))}
-function pipeGap(){return Math.max(140,BASE_PIPE_GAP-Math.min(score,50)*.76)}
-function pipeSpeed(){return BASE_PIPE_SPEED+Math.min(score,50)*1.15}
-function pipeTime(){return Math.max(1.18,BASE_PIPE_TIME-Math.min(score,50)*.006)}
-function reset(){birdY=330;vel=0;pipes=[];score=0;spawn=.65;state='ready';last=performance.now();wing=0;autoCooldown=0;deathAt=0;lastGapY=330;aiPipe=null;aiTargetY=330}
-function flap(){vel=FLAP;wing=1;autoCooldown=FLAP_LOCK}
+function difficulty(){return 1+Math.floor(score/5)}
+function pipeGap(){return Math.max(126,BASE_PIPE_GAP-Math.min(score,80)*.65)}
+function pipeSpeed(){return BASE_PIPE_SPEED+Math.min(score,100)*.85}
+function pipeTime(){return Math.max(1.05,BASE_PIPE_TIME-Math.min(score,100)*.0043)}
+function reset(){birdY=330;vel=0;pipes=[];score=0;spawn=.65;state='ready';last=performance.now();wing=0;autoCooldown=0;deathAt=0;lastGapY=330;aiPipe=null;aiTargetY=330;levelFlash=0;lastLevel=1}
+function flap(){vel=FLAP;wing=1;autoCooldown=FLAP_LOCK;window.ArcadeVibes?.play?.('flap')}
 function startFlap(){if(state==='dead'){reset();state='playing'}else if(state==='ready')state='playing';flap()}
-function die(){if(admin().god)return;state='dead';deathAt=performance.now();best=Math.max(best,score);localStorage.setItem('flappyBest',best)}
+function die(){if(admin().god)return;state='dead';deathAt=performance.now();best=Math.max(best,score);localStorage.setItem('flappyBest',best);window.ArcadeVibes?.play?.('hit')}
 function addPipe(){
   const gap=pipeGap(),min=108+gap/2,max=GROUND-108-gap/2;
   const raw=min+Math.random()*(max-min);
@@ -88,14 +88,28 @@ function drawPipe(p){const b=pipeBounds(p);pipePart(p.x,0,PIPE_W,b.top,true);pip
 function drawBird(){ctx.save();ctx.translate(BX+BW/2,birdY+BH/2);const rot=Math.max(-.38,Math.min(.85,vel/760));ctx.rotate(rot);ctx.translate(-BW/2,-BH/2);ctx.fillStyle='#111';ctx.fillRect(0,5,38,23);ctx.fillRect(6,1,25,30);ctx.fillRect(28,8,16,17);ctx.fillStyle='#f9e713';ctx.fillRect(4,8,24,18);ctx.fillRect(9,4,18,24);ctx.fillStyle='#ffb400';ctx.fillRect(5,wing?18:20,19,8);ctx.fillStyle='#fff';ctx.fillRect(23,4,13,14);ctx.fillStyle='#f1f1f1';ctx.fillRect(25,7,10,12);ctx.fillStyle='#111';ctx.fillRect(32,8,4,8);ctx.fillStyle='#f15a24';ctx.fillRect(32,17,12,7);ctx.fillRect(29,22,12,6);ctx.restore()}
 function drawAIGuide(){if(!admin().flappyAuto||!aiPipe)return;const s=safeBounds(aiPipe);ctx.save();ctx.fillStyle='rgba(255,255,255,.09)';ctx.fillRect(aiPipe.x+3,s.top,PIPE_W-6,Math.max(2,s.bottom-s.top));ctx.strokeStyle='rgba(255,255,255,.38)';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(BX+BW+5,aiTargetY);ctx.lineTo(Math.max(BX+BW+5,aiPipe.x-4),aiTargetY);ctx.stroke();ctx.restore()}
 function centerText(text,y,size){ctx.textAlign='center';ctx.font=`900 ${size}px system-ui`;ctx.lineWidth=5;ctx.strokeStyle='rgba(0,0,0,.35)';ctx.strokeText(text,W/2,y);ctx.fillStyle='#fff';ctx.fillText(text,W/2,y)}
-function drawUI(){centerText(String(score),72,42);ctx.textAlign='right';ctx.font='800 13px system-ui';ctx.fillStyle='rgba(255,255,255,.9)';ctx.fillText(`LV ${difficulty()}`,W-18,70);if(state==='ready'){centerText('FLAPPY BIRD',250,36);centerText(admin().flappyAuto?'AI pilot ready':'Tap to start',305,21)}if(state==='dead'){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(65,245,302,190);centerText('GAME OVER',292,32);ctx.textAlign='left';ctx.font='800 19px system-ui';ctx.fillStyle='#fff';ctx.fillText('Score',105,345);ctx.fillText('Best',105,385);ctx.textAlign='right';ctx.fillText(score,325,345);ctx.fillText(best,325,385);centerText(admin().flappyAuto?'AI restarting…':'Tap to restart',420,16)}}
+function drawUI(){
+  centerText(String(score),72,42);
+  ctx.textAlign='right';ctx.font='800 13px system-ui';ctx.fillStyle='rgba(255,255,255,.9)';ctx.fillText(`LV ${difficulty()}`,W-18,70);
+  if(levelFlash>0){ctx.save();ctx.globalAlpha=Math.min(1,levelFlash*1.7);centerText(`LEVEL ${difficulty()}`,128,25);ctx.restore()}
+  if(state==='ready'){centerText('FLAPPY BIRD',250,36);centerText(admin().flappyAuto?'AI pilot ready':'Tap to start',305,21)}
+  if(state==='dead'){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(65,245,302,190);centerText('GAME OVER',292,32);ctx.textAlign='left';ctx.font='800 19px system-ui';ctx.fillStyle='#fff';ctx.fillText('Score',105,345);ctx.fillText('Best',105,385);ctx.textAlign='right';ctx.fillText(score,325,345);ctx.fillText(best,325,385);centerText(admin().flappyAuto?'AI restarting…':'Tap to restart',420,16)}
+}
 function physicsStep(step){
   const a=admin();runAIPilot(step);if(state!=='playing')return;
   if(!a.flappyAuto)autoCooldown=Math.max(0,autoCooldown-step);
+  levelFlash=Math.max(0,levelFlash-step);
   vel=Math.min(MAX_FALL,vel+GRAVITY*step);birdY+=vel*step;wing=Math.max(0,wing-step*7);
   spawn+=step;const pt=pipeTime();while(spawn>=pt){spawn-=pt;addPipe()}
   const sp=pipeSpeed();
-  for(const p of pipes){p.x-=sp*step;if(!p.passed&&p.x+PIPE_W<BX){p.passed=true;score++}if(collisionAt(birdY+BH/2,p))die()}
+  for(const p of pipes){
+    p.x-=sp*step;
+    if(!p.passed&&p.x+PIPE_W<BX){
+      p.passed=true;score++;window.ArcadeVibes?.play?.('score');
+      const lv=difficulty();if(lv>lastLevel){lastLevel=lv;levelFlash=1;window.ArcadeVibes?.play?.('win')}
+    }
+    if(collisionAt(birdY+BH/2,p))die()
+  }
   pipes=pipes.filter(p=>p.x>-PIPE_W-20);
   if(birdY<0){if(a.god){birdY=0;vel=0}else die()}
   if(birdY+BH>GROUND){if(a.god){birdY=GROUND-BH;vel=-160}else die()}
