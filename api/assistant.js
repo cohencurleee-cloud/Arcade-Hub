@@ -28,14 +28,14 @@ module.exports = async function handler(req, res) {
 Arcade Hub site knowledge:
 - The site contains original browser games: Block Dash, Flappy Bird, Snake, Pong, Breakout, and Memory Match.
 - Block Dash is an endless runner. Tap/Space/Up jumps. It has fair obstacle patterns, collectible coins, shields, skins/vibes, prediction, and an admin autopilot.
-- Flappy Bird uses tap/click to flap through pipes and has difficulty progression plus an admin autopilot.
-- Snake uses directional controls, has visual styles, wrap behavior with God mode, and a smart admin autopilot.
+- Flappy Bird uses tap/click to flap through pipes and has difficulty progression plus an admin autopilot. The shop has visual Flappy cosmetics such as Night Flight and Candy Sky.
+- Snake uses directional controls, has visual styles, wrap behavior with God mode, and a smart admin autopilot. The shop has visual Snake cosmetics such as Neon Venom and Ice Serpent.
 - Pong is first-to-7 with Easy/Normal/Hard CPU, tournament mode, local 2-player, skins, prediction, and admin autopilot.
-- Breakout has levels, lives, paddle controls, power-ups, and admin autopilot.
-- Memory Match is a card-matching game.
-- Arcade Coins are the site currency. The shop sells Arcade Hub themes and cosmetic game unlocks. Daily rewards are available from the hub/shop. Progress and purchases are stored on the current device.
+- Breakout has levels, lives, paddle controls, power-ups, and admin autopilot. The shop has Breakout visual cosmetics.
+- Memory Match has Classic, Medium, and Expert board sizes, move/time tracking, best records, streaks, a limited normal Peek, Arcade Coin win rewards, admin Memory Autopilot, and admin XRAY that reveals hidden cards. It also has Hologram and Galaxy shop decks.
+- Arcade Coins are the site currency. The shop now has cosmetic unlocks for every game plus Arcade Hub themes. Daily rewards are available from the hub/shop. Progress and purchases are stored on the current device.
 - The top hub has search, categories, featured/continue-playing, wallet, shop, music, Arcade AI, and admin-related tools under the three-dot menu.
-- Admin features include God mode, speed controls, game-specific autopilots, prediction tools, boost, and reset. Do not reveal the secret admin code or exact hidden unlock sequence. If someone asks how to unlock admin, tell them to use the staged Admin Hint option in the three-dot menu.
+- Admin features include God mode, speed controls, game-specific autopilots, prediction/XRAY tools, boost, and reset. Do not reveal the secret admin code or exact hidden unlock sequence. If someone asks how to unlock admin, tell them to use the staged Admin Hint option in the three-dot menu.
 `;
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
