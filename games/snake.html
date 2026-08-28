@@ -8,27 +8,42 @@
 html,body{margin:0;height:100%;background:#08090d;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;overflow:hidden}
 body{display:grid;place-items:center}
 canvas{width:min(100vw,760px);height:min(78vh,560px);background:#0e1320;touch-action:none;border-radius:18px}
-.top{position:fixed;top:max(10px,env(safe-area-inset-top));left:10px;right:86px;display:flex;justify-content:space-between;z-index:2;pointer-events:none}
-.top a,.top button{pointer-events:auto;color:#fff;background:rgba(23,28,40,.9);border:1px solid #2b3346;padding:9px 12px;border-radius:12px;text-decoration:none;font-weight:700;backdrop-filter:blur(10px)}
+.top{position:fixed;top:max(10px,env(safe-area-inset-top));left:10px;right:82px;display:flex;justify-content:space-between;align-items:center;gap:10px;z-index:2;pointer-events:none}
+.topActions{display:flex;gap:8px;pointer-events:auto}.top a,.top button{pointer-events:auto;color:#fff;background:rgba(23,28,40,.9);border:1px solid #2b3346;padding:9px 12px;border-radius:12px;text-decoration:none;font-weight:700;backdrop-filter:blur(10px)}
 .hint{position:fixed;bottom:max(10px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(23,28,40,.9);padding:8px 12px;border-radius:999px;color:#bec5d6;font-size:12px;white-space:nowrap;z-index:2}
+#snakeSettings{position:fixed;z-index:100001;inset:0;background:rgba(0,0,0,.68);display:none;place-items:center;padding:18px}
+#snakeSettings.open{display:grid}
+#snakeSettings .box{width:min(92vw,370px);background:#11151f;border:1px solid #30384b;border-radius:22px;padding:18px;box-shadow:0 24px 70px #0008}
+#snakeSettings h2{margin:0 0 5px;font-size:23px}#snakeSettings .muted{margin:0 0 16px;color:#9da6ba;font-size:13px}
+.styleChoice{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}.styleChoice button{border:1px solid #343d52;background:#1b2230;color:#fff;border-radius:14px;padding:13px 10px;font-weight:800;font-size:14px}.styleChoice button.active{background:#eef8e9;color:#173715;border-color:#9bd37d}
+.settingPreview{margin-top:14px;border:1px solid #2a3243;border-radius:16px;padding:12px;color:#bec5d6;font-size:13px;line-height:1.4}
+.closeSettings{width:100%;margin-top:14px;border:1px solid #343d52;background:#1b2230;color:#fff;border-radius:13px;padding:12px;font-weight:800}
 </style>
 </head>
 <body>
-<div class="top"><a href="../index.html">← Games</a><button onclick="reset()">Restart</button></div>
+<div class="top"><a href="../index.html">← Games</a><div class="topActions"><button id="restartBtn">Restart</button><button id="settingsBtn">Settings</button></div></div>
 <canvas id="c" width="760" height="560"></canvas>
 <div class="hint" id="hint">Swipe to steer</div>
+<div id="snakeSettings" aria-hidden="true"><div class="box"><h2>Snake Settings</h2><p class="muted">Choose how the game looks. This setting is separate from the secret admin panel.</p><b>Visual style</b><div class="styleChoice"><button id="realisticBtn">Realistic</button><button id="classicBtn">Classic</button></div><div class="settingPreview" id="styleDescription"></div><button class="closeSettings" id="closeSettings">Done</button></div></div>
 <script src="../admin.js"></script>
 <script>
-const c=document.getElementById('c'),x=c.getContext('2d'),COLS=25,ROWS=18,CELL=30,DIRS=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-let s,dir,food,last=0,dead=false,won=false;
-const admin=()=>window.ArcadeAdmin?.getSettings?.()||{god:false,speed:1,snakeAuto:false,snakeRealistic:true};
+const c=document.getElementById('c'),x=c.getContext('2d'),COLS=25,ROWS=18,CELL=30,DIRS=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}],STYLE_KEY='snakeVisualStyle';
+let s,dir,food,last=0,dead=false,won=false,visualStyle=localStorage.getItem(STYLE_KEY)||'realistic';
+const admin=()=>window.ArcadeAdmin?.getSettings?.()||{god:false,speed:1,snakeAuto:false};
 const key=p=>p.x+','+p.y,same=(a,b)=>a.x===b.x&&a.y===b.y,inside=p=>p.x>=0&&p.y>=0&&p.x<COLS&&p.y<ROWS;
+function isRealistic(){return visualStyle==='realistic'}
+function setVisualStyle(style){visualStyle=style==='classic'?'classic':'realistic';localStorage.setItem(STYLE_KEY,visualStyle);syncSettings()}
+function syncSettings(){realisticBtn.classList.toggle('active',isRealistic());classicBtn.classList.toggle('active',!isRealistic());styleDescription.textContent=isRealistic()?'Rounded rainbow snake, eyes, grass grid, shadows and detailed apples.':'Original Arcade Hub look with square snake blocks and a simple red food square.'}
+function openSettings(){syncSettings();snakeSettings.classList.add('open');snakeSettings.setAttribute('aria-hidden','false')}
+function closeGameSettings(){snakeSettings.classList.remove('open');snakeSettings.setAttribute('aria-hidden','true')}
+settingsBtn.onclick=openSettings;closeSettings.onclick=closeGameSettings;realisticBtn.onclick=()=>setVisualStyle('realistic');classicBtn.onclick=()=>setVisualStyle('classic');snakeSettings.addEventListener('pointerdown',e=>{if(e.target===snakeSettings)closeGameSettings()});
 function norm(p,wrap){return wrap?{x:(p.x+COLS)%COLS,y:(p.y+ROWS)%ROWS}:p}
 function spawnFood(){const free=[];for(let yy=0;yy<ROWS;yy++)for(let xx=0;xx<COLS;xx++)if(!s.some(q=>q.x===xx&&q.y===yy))free.push({x:xx,y:yy});if(!free.length){food=null;won=true;dead=true;return}food=free[Math.floor(Math.random()*free.length)]}
 function reset(){s=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir={x:1,y:0};dead=false;won=false;last=0;food={x:15,y:10}}
+restartBtn.onclick=reset;
 function setd(a,b){if(admin().snakeAuto)return;if(dir.x!==-a||dir.y!==-b)dir={x:a,y:b}}
 addEventListener('keydown',e=>{if(e.key==='ArrowUp')setd(0,-1);if(e.key==='ArrowDown')setd(0,1);if(e.key==='ArrowLeft')setd(-1,0);if(e.key==='ArrowRight')setd(1,0)});
-let sx,sy;c.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY});c.addEventListener('pointerup',e=>{if(admin().snakeAuto)return;const dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)>Math.abs(dy))setd(dx>0?1:-1,0);else setd(0,dy>0?1:-1)});
+let sx,sy;c.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY});c.addEventListener('pointerup',e=>{if(admin().snakeAuto)return;const dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)<8&&Math.abs(dy)<8)return;if(Math.abs(dx)>Math.abs(dy))setd(dx>0?1:-1,0);else setd(0,dy>0?1:-1)});
 function neighbors(p,wrap){const out=[];for(const d of DIRS){const n=norm({x:p.x+d.x,y:p.y+d.y},wrap);if(wrap||inside(n))out.push(n)}return out}
 function curFromKey(k){const [a,b]=k.split(',').map(Number);return{x:a,y:b}}
 function findPath(start,target,body,wrap){if(!target)return null;const blocked=new Set(body.slice(0,-1).map(key));blocked.delete(key(start));const q=[start],seen=new Set([key(start)]),prev=new Map();for(let i=0;i<q.length;i++){const cur=q[i];if(same(cur,target)){const path=[];let k=key(cur);while(k!==key(start)){path.unshift(curFromKey(k));k=prev.get(k)}return path}for(const n of neighbors(cur,wrap)){const nk=key(n);if(seen.has(nk)||blocked.has(nk))continue;seen.add(nk);prev.set(nk,key(cur));q.push(n)}}return null}
@@ -43,14 +58,13 @@ function drawClassic(){x.fillStyle='#0e1320';x.fillRect(0,0,760,560);for(let i=s
 function pt(q){return{x:q.x*CELL+CELL/2,y:q.y*CELL+CELL/2}}
 function rainbow(t){const h=(215+t*300)%360;return `hsl(${h} 82% 57%)`}
 function drawGrass(){const g=x.createLinearGradient(0,0,0,560);g.addColorStop(0,'#a8df50');g.addColorStop(1,'#8ecc3f');x.fillStyle=g;x.fillRect(0,0,760,560);x.strokeStyle='rgba(87,132,35,.12)';x.lineWidth=1;for(let xx=0;xx<=750;xx+=CELL){x.beginPath();x.moveTo(xx,0);x.lineTo(xx,540);x.stroke()}for(let yy=0;yy<=540;yy+=CELL){x.beginPath();x.moveTo(0,yy);x.lineTo(750,yy);x.stroke()}x.fillStyle='rgba(255,255,255,.035)';for(let yy=0;yy<ROWS;yy++)for(let xx=0;xx<COLS;xx++)if((xx+yy)%2===0)x.fillRect(xx*CELL,yy*CELL,CELL,CELL)}
-function drawApple(){if(!food)return;const p=pt(food);x.save();x.shadowColor='rgba(0,0,0,.22)';x.shadowBlur=9;x.shadowOffsetY=4;const rg=x.createRadialGradient(p.x-6,p.y-7,2,p.x,p.y,15);rg.addColorStop(0,'#ff8b68');rg.addColorStop(.35,'#f04b2f');rg.addColorStop(1,'#bf2319');x.fillStyle=rg;x.beginPath();x.arc(p.x-5,p.y+1,9.5,0,Math.PI*2);x.arc(p.x+5,p.y+1,9.5,0,Math.PI*2);x.arc(p.x,p.y+5,12,0,Math.PI*2);x.fill();x.shadowColor='transparent';x.strokeStyle='#6c351e';x.lineWidth=3;x.beginPath();x.moveTo(p.x,p.y-8);x.quadraticCurveTo(p.x+1,p.y-16,p.x+5,p.y-18);x.stroke();x.fillStyle='#54a93b';x.beginPath();x.ellipse(p.x+8,p.y-13,6,3.5,-.5,0,Math.PI*2);x.fill();x.restore()}
-function drawRealisticSnake(){if(!s.length)return;const points=s.map(pt);x.save();x.lineCap='round';x.lineJoin='round';x.shadowColor='rgba(28,72,40,.22)';x.shadowBlur=8;x.shadowOffsetY=3;for(let i=points.length-1;i>0;i--){const a=points[i],b=points[i-1],grad=x.createLinearGradient(a.x,a.y,b.x,b.y);const t1=1-i/Math.max(1,points.length-1),t2=1-(i-1)/Math.max(1,points.length-1);grad.addColorStop(0,rainbow(t1));grad.addColorStop(1,rainbow(t2));x.strokeStyle=grad;x.lineWidth=21;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()}const head=points[0];x.shadowColor='rgba(28,72,40,.18)';x.fillStyle=rainbow(1);x.beginPath();x.arc(head.x,head.y,12.5,0,Math.PI*2);x.fill();x.shadowColor='transparent';const perp={x:-dir.y,y:dir.x},forward={x:dir.x,y:dir.y};for(const side of [-1,1]){const ex=head.x+forward.x*5+perp.x*side*5,ey=head.y+forward.y*5+perp.y*side*5;x.fillStyle='#fff';x.beginPath();x.arc(ex,ey,4.2,0,Math.PI*2);x.fill();x.fillStyle='#1e2b45';x.beginPath();x.arc(ex+forward.x*1.4,ey+forward.y*1.4,1.8,0,Math.PI*2);x.fill()}x.restore()}
+function drawApple(){if(!food)return;const p=pt(food);x.save();x.shadowColor='rgba(0,0,0,.24)';x.shadowBlur=9;x.shadowOffsetY=4;const rg=x.createRadialGradient(p.x-6,p.y-7,2,p.x,p.y,15);rg.addColorStop(0,'#ff9b78');rg.addColorStop(.32,'#f05232');rg.addColorStop(1,'#b91f17');x.fillStyle=rg;x.beginPath();x.arc(p.x-5,p.y+1,9.5,0,Math.PI*2);x.arc(p.x+5,p.y+1,9.5,0,Math.PI*2);x.arc(p.x,p.y+5,12,0,Math.PI*2);x.fill();x.shadowColor='transparent';x.fillStyle='rgba(255,255,255,.38)';x.beginPath();x.ellipse(p.x-6,p.y-5,3,5,-.5,0,Math.PI*2);x.fill();x.strokeStyle='#6c351e';x.lineWidth=3;x.beginPath();x.moveTo(p.x,p.y-8);x.quadraticCurveTo(p.x+1,p.y-16,p.x+5,p.y-18);x.stroke();x.fillStyle='#54a93b';x.beginPath();x.ellipse(p.x+8,p.y-13,6,3.5,-.5,0,Math.PI*2);x.fill();x.restore()}
+function drawRealisticSnake(){if(!s.length)return;const points=s.map(pt);x.save();x.lineCap='round';x.lineJoin='round';x.shadowColor='rgba(28,72,40,.22)';x.shadowBlur=8;x.shadowOffsetY=3;for(let i=points.length-1;i>0;i--){const a=points[i],b=points[i-1],grad=x.createLinearGradient(a.x,a.y,b.x,b.y);const t1=1-i/Math.max(1,points.length-1),t2=1-(i-1)/Math.max(1,points.length-1);grad.addColorStop(0,rainbow(t1));grad.addColorStop(1,rainbow(t2));x.strokeStyle=grad;x.lineWidth=21;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()}const head=points[0];x.shadowColor='rgba(28,72,40,.18)';x.fillStyle=rainbow(1);x.beginPath();x.arc(head.x,head.y,13,0,Math.PI*2);x.fill();x.shadowColor='transparent';const perp={x:-dir.y,y:dir.x},forward={x:dir.x,y:dir.y};for(const side of [-1,1]){const ex=head.x+forward.x*5+perp.x*side*5,ey=head.y+forward.y*5+perp.y*side*5;x.fillStyle='#fff';x.beginPath();x.arc(ex,ey,4.4,0,Math.PI*2);x.fill();x.fillStyle='#1e2b45';x.beginPath();x.arc(ex+forward.x*1.5,ey+forward.y*1.5,1.9,0,Math.PI*2);x.fill()}x.restore()}
 function drawRealistic(){drawGrass();drawApple();drawRealisticSnake()}
-function drawHud(a){x.fillStyle=a.snakeRealistic?'rgba(38,78,24,.82)':'rgba(255,255,255,.95)';x.font='800 23px system-ui';x.textAlign='left';x.fillText('🍎 '+(s.length-3),20,38);if(a.snakeAuto){x.textAlign='right';x.fillStyle=a.snakeRealistic?'#173715':'#8bff9e';x.font='900 17px system-ui';x.fillText('AUTOPILOT',735,38);x.textAlign='left';hint.textContent='Autopilot is steering'}else hint.textContent=a.snakeRealistic?'Swipe to steer • Realistic style':'Swipe to steer • Classic style';if(dead){x.fillStyle='rgba(0,0,0,.62)';x.fillRect(150,220,460,112);x.fillStyle='#fff';x.textAlign='center';x.font='900 38px system-ui';x.fillText(won?'BOARD CLEARED':'GAME OVER',380,267);x.font='700 18px system-ui';x.fillText('Tap Restart to play again',380,305);x.textAlign='left'}}
-function loop(n){const a=admin();if(n-last>95/a.speed&&!dead){last=n;step()}if(a.snakeRealistic)drawRealistic();else drawClassic();drawHud(a);requestAnimationFrame(loop)}
-addEventListener('arcade-admin-change',()=>{});
+function drawHud(a){x.fillStyle=isRealistic()?'rgba(38,78,24,.82)':'rgba(255,255,255,.95)';x.font='800 23px system-ui';x.textAlign='left';x.fillText('🍎 '+(s.length-3),20,38);if(a.snakeAuto){x.textAlign='right';x.fillStyle=isRealistic()?'#173715':'#8bff9e';x.font='900 17px system-ui';x.fillText('AUTOPILOT',735,38);x.textAlign='left';hint.textContent='Autopilot is steering'}else hint.textContent=isRealistic()?'Swipe to steer • Realistic style':'Swipe to steer • Classic style';if(dead){x.fillStyle='rgba(0,0,0,.62)';x.fillRect(150,220,460,112);x.fillStyle='#fff';x.textAlign='center';x.font='900 38px system-ui';x.fillText(won?'BOARD CLEARED':'GAME OVER',380,267);x.font='700 18px system-ui';x.fillText('Tap Restart to play again',380,305);x.textAlign='left'}}
+function loop(n){const a=admin();if(n-last>95/a.speed&&!dead){last=n;step()}if(isRealistic())drawRealistic();else drawClassic();drawHud(a);requestAnimationFrame(loop)}
 addEventListener('arcade-admin-command',e=>{if(e.detail.command==='boost'){for(let i=0;i<5;i++){const tail=s[s.length-1];s.push({...tail})}}if(e.detail.command==='reset')reset()});
-reset();requestAnimationFrame(loop);
+syncSettings();reset();requestAnimationFrame(loop);
 </script>
 </body>
 </html>
