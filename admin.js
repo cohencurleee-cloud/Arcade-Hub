@@ -6,9 +6,10 @@
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   function settings(){try{return{...defaults,...JSON.parse(localStorage.getItem(SETTINGS)||'{}')}}catch{return{...defaults}}}
   function save(s){localStorage.setItem(SETTINGS,JSON.stringify(s));window.dispatchEvent(new CustomEvent('arcade-admin-change',{detail:{settings:s}}))}
-  function command(name){window.dispatchEvent(new CustomEvent('arcade-admin-command',{detail:{command:name,settings:settings()}}))}
+  function command(name){window.dispatchEvent(new CustomEvent('arcade-admin-command',{detail:{command:name,settings:settings()}))}
   function unlocked(){return localStorage.getItem(UNLOCK)==='1'}
   function pageType(){const p=location.pathname.toLowerCase();if(p.includes('/games/snake.html'))return'snake';if(p.includes('/games/flappy-square.html'))return'flappy';if(p.includes('/games/breakout.html'))return'breakout';if(p.includes('/games/'))return'game';return'hub'}
+  function speedText(v){v=Number(v);if(!Number.isFinite(v)||v<=0)return'1x';if(v>=1000000||v<.001)return v.toExponential(2)+'x';return String(v)+'x'}
   window.ArcadeAdmin={getSettings:settings,isUnlocked:unlocked,command};
 
   function css(){
@@ -23,7 +24,7 @@
 #arcadeAdminPanel .row small{display:block;color:#8993aa;font-weight:500;margin-top:3px;max-width:220px}
 #arcadeAdminPanel input[type=checkbox]{width:22px;height:22px;accent-color:#6de68b;flex:0 0 auto}
 #arcadeAdminPanel input[type=range]{width:145px}
-#arcadeAdminPanel input[type=number]{width:92px;border:1px solid #343d52;background:#090c12;color:#fff;border-radius:10px;padding:9px 8px;font:800 16px system-ui;text-align:center}
+#arcadeAdminPanel input[type=text]{width:108px;border:1px solid #343d52;background:#090c12;color:#fff;border-radius:10px;padding:9px 8px;font:800 16px system-ui;text-align:center}
 #arcadeAdminPanel button{border:1px solid #343d52;background:#1b2230;color:#fff;border-radius:12px;padding:10px 12px;font-weight:800}
 #arcadeAdminPanel .speedCustom{display:flex;gap:7px;align-items:center}#arcadeAdminPanel .speedCustom button{padding:9px 10px}
 #arcadeAdminPanel .buttons{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
@@ -49,12 +50,12 @@
     if(type==='snake'||type==='hub')autoRows+=autoRow('aaSnakeAuto','Snake autopilot','Automatically hunts apples and tries to avoid trapping itself.',s.snakeAuto);
     if(type==='flappy'||type==='hub')autoRows+=autoRow('aaFlappyAuto','Flappy autopilot','Automatically times real jumps and aims for pipe openings.',s.flappyAuto);
     if(type==='breakout'||type==='hub')autoRows+=autoRow('aaBreakoutAuto','Breakout autopilot','Tracks the ball and catches falling power-ups.',s.breakoutAuto);
-    const current=clamp(Number(s.speed)||1,.1,20);
+    const raw=Number(s.speed),current=Number.isFinite(raw)&&raw>0?raw:1,sliderCurrent=clamp(current,.5,20);
     panel=document.createElement('div');panel.id='arcadeAdminPanel';
-    panel.innerHTML=`<div class="box"><h2>Admin Panel</h2><div class="muted">Unlocked for every Arcade Hub game.</div><div class="row"><b>God mode</b><input id="aaGod" type="checkbox" ${s.god?'checked':''}></div><div class="row"><span><b>Game speed</b><small>Drag for quick changes.</small></span><span><input id="aaSpeed" type="range" min="0.5" max="20" step="0.5" value="${current}"> <b id="aaSpeedText">${current.toFixed(1)}x</b></span></div><div class="row"><span><b>Custom speed</b><small>Type an exact speed from 0.1x to 20x.</small></span><span class="speedCustom"><input id="aaCustomSpeed" type="number" inputmode="decimal" min="0.1" max="20" step="0.1" value="${current}"><button id="aaSetSpeed">Set</button></span></div>${autoRows}<div class="buttons"><button id="aaBoost">Boost</button><button id="aaReset">Reset game</button><button id="aaClose">Close</button><button id="aaLock">Lock admin</button></div></div>`;
+    panel.innerHTML=`<div class="box"><h2>Admin Panel</h2><div class="muted">Unlocked for every Arcade Hub game.</div><div class="row"><b>God mode</b><input id="aaGod" type="checkbox" ${s.god?'checked':''}></div><div class="row"><span><b>Game speed</b><small>Slider is a quick 0.5x–20x control.</small></span><span><input id="aaSpeed" type="range" min="0.5" max="20" step="0.5" value="${sliderCurrent}"> <b id="aaSpeedText">${speedText(current)}</b></span></div><div class="row"><span><b>Custom speed</b><small>No maximum — type any positive number.</small></span><span class="speedCustom"><input id="aaCustomSpeed" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="${current}"><button id="aaSetSpeed">Set</button></span></div>${autoRows}<div class="buttons"><button id="aaBoost">Boost</button><button id="aaReset">Reset game</button><button id="aaClose">Close</button><button id="aaLock">Lock admin</button></div></div>`;
     document.body.appendChild(panel);
     const god=panel.querySelector('#aaGod'),speed=panel.querySelector('#aaSpeed'),label=panel.querySelector('#aaSpeedText'),custom=panel.querySelector('#aaCustomSpeed');
-    const applySpeed=v=>{v=Number(v);if(!Number.isFinite(v))return;v=clamp(v,.1,20);save({...settings(),speed:v});label.textContent=v.toFixed(1)+'x';custom.value=String(v);speed.value=String(clamp(v,.5,20))};
+    const applySpeed=v=>{v=Number(String(v).trim());if(!Number.isFinite(v)||v<=0){custom.value=String(settings().speed||1);return}save({...settings(),speed:v});label.textContent=speedText(v);custom.value=String(v);speed.value=String(clamp(v,.5,20))};
     god.onchange=()=>save({...settings(),god:god.checked});
     speed.oninput=()=>applySpeed(speed.value);
     panel.querySelector('#aaSetSpeed').onclick=()=>applySpeed(custom.value);
