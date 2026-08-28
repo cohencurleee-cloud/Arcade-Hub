@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080b12">
+<title>Arcade Shop</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#07090e;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}body{--accent:#7f8cff;--accent2:#55d7ff;--panel:#10151f;--panel2:#151c29;--border:#293244;--muted:#97a3b8;background:radial-gradient(circle at 20% -10%,color-mix(in srgb,var(--accent) 18%,transparent),transparent 34%),#07090e}body[data-theme="theme-sunset"]{--accent:#ff8a63;--accent2:#ff5d91}body[data-theme="theme-toxic"]{--accent:#91ef65;--accent2:#36db83}body[data-theme="theme-cyber"]{--accent:#8d7cff;--accent2:#4bd9ff}a,button{font:inherit}.wrap{width:min(1100px,100%);margin:auto;padding:18px 16px 60px}.nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:26px}.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;font-weight:900}.mark{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#081018;font-weight:1000}.wallet{display:flex;align-items:center;gap:8px;background:#111722;border:1px solid var(--border);border-radius:999px;padding:9px 12px;font-weight:900}.hero{display:grid;grid-template-columns:1.3fr .7fr;gap:14px;margin-bottom:22px}.heroCard,.daily{border:1px solid var(--border);background:linear-gradient(145deg,#101722,#0b1018);border-radius:24px;padding:22px}.heroCard h1{font-size:clamp(30px,7vw,54px);margin:0 0 8px;letter-spacing:-.04em}.heroCard p{margin:0;color:var(--muted);max-width:620px;line-height:1.5}.daily{display:flex;flex-direction:column;justify-content:space-between}.daily b{font-size:18px}.daily p{color:var(--muted);margin:7px 0 14px;font-size:13px}.claim{border:0;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#081018;padding:12px;font-weight:950}.claim:disabled{opacity:.45}.stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.stat{padding:8px 10px;border-radius:12px;background:#0b111a;border:1px solid #242d3d;color:#a9b4c7;font-size:12px;font-weight:800}.filters{display:flex;gap:8px;overflow:auto;padding-bottom:4px;margin:14px 0 16px}.filter{white-space:nowrap;border:1px solid var(--border);background:#111722;color:#dbe2ef;border-radius:999px;padding:9px 12px;font-weight:850}.filter.active{background:#eef3ff;color:#101521}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.item{min-width:0;border:1px solid var(--border);background:linear-gradient(180deg,#111824,#0d121a);border-radius:20px;padding:13px;display:flex;flex-direction:column;gap:10px}.preview{height:98px;border-radius:15px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.1)}.preview:after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,rgba(255,255,255,.18),transparent 38%)}.meta{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.meta h3{margin:0;font-size:16px}.game{color:var(--muted);font-size:11px;font-weight:850;margin-top:3px}.desc{color:#9eabba;font-size:12px;line-height:1.4;min-height:34px}.buy{margin-top:auto;border:1px solid #374156;background:#192232;color:#fff;border-radius:13px;padding:10px 11px;font-weight:900}.buy.primary{background:#eef3ff;color:#101521}.price{font-weight:950;color:#f7d66d}.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;background:#121925;border:1px solid #30394d;padding:10px 14px;border-radius:999px;font-weight:850;transition:.18s ease;z-index:10}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}@media(max-width:760px){.hero{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.heroCard,.daily{padding:18px}}@media(max-width:420px){.grid{grid-template-columns:1fr 1fr;gap:9px}.item{padding:10px}.preview{height:78px}.desc{font-size:11px}.wallet{padding:8px 10px;font-size:13px}.heroCard h1{font-size:34px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a class="brand" href="index.html"><span class="mark">AH</span><span>Arcade Hub</span></a>
+    <div class="wallet"><span>◈</span><span id="wallet">0</span></div>
+  </div>
+
+  <section class="hero">
+    <div class="heroCard">
+      <h1>Arcade Shop</h1>
+      <p>Earn Arcade Coins, then spend them on hub themes and real cosmetic unlocks for your games.</p>
+      <div class="stats"><span class="stat" id="earnedStat">Earned 0</span><span class="stat" id="spentStat">Spent 0</span><span class="stat" id="ownedStat">Owned 1</span></div>
+    </div>
+    <div class="daily">
+      <div><b>Daily Coins</b><p>Come back each day for a free coin drop.</p></div>
+      <button class="claim" id="dailyBtn">Claim +30</button>
+    </div>
+  </section>
+
+  <div class="filters" id="filters"></div>
+  <div class="grid" id="grid"></div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="arcade-economy.js"></script>
+<script>
+const econ=window.ArcadeEconomy,grid=document.getElementById('grid'),wallet=document.getElementById('wallet'),toast=document.getElementById('toast'),dailyBtn=document.getElementById('dailyBtn');
+const cats=['All','Arcade Hub','Pong','Block Dash'];let filter='All';
+function currentGameSkin(type){try{if(type==='pongSkin')return JSON.parse(localStorage.getItem('pongProfileV2')||'{}').skin;if(type==='dashSkin')return JSON.parse(localStorage.getItem('blockDashProfileV2')||'{}').skin}catch{}return null}
+function equipped(it){if(it.type==='theme')return econ.currentTheme()===it.id;return currentGameSkin(it.type)===it.skin}
+function message(text){toast.textContent=text;toast.classList.add('show');clearTimeout(message.t);message.t=setTimeout(()=>toast.classList.remove('show'),1400)}
+function sync(){
+  const s=econ.state();document.body.dataset.theme=econ.currentTheme();wallet.textContent=s.coins;earnedStat.textContent='Earned '+(s.earned||0);spentStat.textContent='Spent '+(s.spent||0);ownedStat.textContent='Owned '+s.owned.length;
+  dailyBtn.disabled=!econ.dailyAvailable();dailyBtn.textContent=econ.dailyAvailable()?'Claim +30':'Claimed today';
+}
+function renderFilters(){filters.innerHTML=cats.map(c=>`<button class="filter ${c===filter?'active':''}" data-cat="${c}">${c}</button>`).join('');filters.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{filter=b.dataset.cat;renderFilters();render()})}
+function render(){
+  const items=econ.catalog().filter(x=>filter==='All'||x.game===filter);
+  grid.innerHTML=items.map(it=>{
+    const own=econ.owns(it.id),eq=equipped(it),can=econ.balance()>=it.price;
+    let label=own?(eq?'Equipped':'Equip'):`◈ ${it.price}`;
+    return `<article class="item"><div class="preview" style="background:linear-gradient(135deg,${it.preview[0]},${it.preview[1]})"></div><div class="meta"><div><h3>${it.name}</h3><div class="game">${it.game}</div></div>${!own?`<span class="price">◈ ${it.price}</span>`:''}</div><div class="desc">${it.desc}</div><button class="buy ${own||can?'primary':''}" data-buy="${it.id}">${label}</button></article>`
+  }).join('');
+  grid.querySelectorAll('[data-buy]').forEach(btn=>btn.onclick=()=>{
+    const id=btn.dataset.buy,it=econ.item(id);
+    if(econ.owns(id)){
+      if(equipped(it)){message('Already equipped');return}
+      econ.equip(id);message(`${it.name} equipped`);sync();render();return
+    }
+    const r=econ.purchase(id);
+    if(!r.ok){message(r.error||'Could not buy item');return}
+    econ.equip(id);message(`${it.name} purchased`);sync();render();
+  })
+}
+dailyBtn.onclick=()=>{const r=econ.claimDaily();if(r.ok)message('+30 Arcade Coins');sync();render()};
+window.addEventListener('arcade-economy-change',()=>{sync();render()});
+sync();renderFilters();render();
+</script>
+</body>
+</html>
